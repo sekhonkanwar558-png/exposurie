@@ -1,0 +1,170 @@
+# The output contract
+
+Every byte this tool prints is written for a **model** to act on, with a person
+somewhere behind it. That single fact decides the whole format.
+
+Nearly every CLI on npm assumes a human is watching the screen. This one assumes
+a model is reading the output and a person is somewhere behind it. The chain is
+always **tool -> agent -> human**, never tool -> human.
+
+Everything else in the product is built against this document.
+
+---
+
+## The four rules
+
+### 1. Nothing ever prompts
+
+When an agent runs a command there is **nobody at the keyboard**. A tool that
+waits for stdin does not get stdin — it hangs, and the agent looks frozen with
+no error to report.
+
+So the product has no prompts, no `[Y/n]`, no confirmations, no spinners waiting
+on a keypress. Input needed from a person is *requested* through a pending step
+and the process **exits immediately**.
+
+> Enforced by test, not by convention: `contract.test.js` greps all shipped
+> source for `readline`, `process.stdin`, `prompt(`, `inquirer`. Adding one
+> fails the suite.
+
+### 2. Every actionable line opens with a verb in caps
+
+`RUN:` · `ASK YOUR USER:` · `TELL YOUR USER:` · `READ:`
+
+An instruction buried in prose is an instruction skipped. The keyword is the
+signal that this line is for *doing*, not for reading.
+
+### 3. Print the command, never the concept
+
+Not "open the page" — the exact argv that opens it. A wikilink is a human
+convention; a command is a thing the agent can execute. If output mentions
+something the agent might want next, it carries the literal invocation.
+
+### 4. The directive rides the output
+
+Anything the agent must keep doing is attached to output it is **already
+reading**, never to documentation we hope it read once. This costs nothing until
+the tool is used, and it is the only mechanism here with field proof behind it.
+
+---
+
+## The skeleton
+
+Position is load-bearing. An agent can rely on order, so the order never varies:
+
+```
+<state line>          always first, even on error
+
+FOR YOUR USER — n pending    only when a human owes something
+
+ERROR                        only on failure
+
+<command body>               the actual answer
+
+EXIT n — <what that means in words>
+```
+
+Blank line between blocks. No colour, no box drawing, no spinners — they cost
+tokens and survive nothing.
+
+---
+
+## Exit codes
+
+| code | name | meaning |
+|---|---|---|
+| `0` | OK | did the thing; nothing outstanding |
+| `1` | ERROR | actually broke; an `ERROR` block explains it |
+| `2` | USAGE | no such command or bad flags |
+| `10` | HUMAN | **a step needs a person. Nothing failed.** |
+
+`10` is the important one. Without it, "waiting on your user" is indistinguishable
+from "crashed", and an agent that cannot tell them apart either panics or ignores
+both.
+
+**Staleness never gets a code.** A brain that has not synced in nine days still
+works, and a command that exits non-zero over it teaches agents the number is
+noise. The nudge rides the state line instead. A warning that fails the run over
+a non-problem gets muted, and a muted check is worth nothing on the day
+something is actually wrong.
+
+---
+
+## The state line
+
+Printed first by every command, always.
+
+```
+exposurie  61 pages · 6 sessions unfiled · last sync 9d ago · backup never
+           -> RUN: exposurie sync
+```
+
+This is **the retention mechanism**, not decoration. v1 sync is manual, so the
+trigger is an agent choosing to nudge — and an agent that has to *remember* will
+not. Attaching the number to output the agent already reads makes forgetting
+structurally impossible.
+
+Two constraints keep the arrow meaningful:
+
+- It appears **only when earned** — unfiled sessions, or 7+ days since a sync. A
+  healthy brain gets no arrow.
+- It **never advertises the command it is already inside.** A `sync` run does not
+  tell you to run `sync`. A nudge that fires during its own target teaches an
+  agent the arrow is decoration.
+
+---
+
+## Pending human steps
+
+Two things a user's agent genuinely cannot do: request their claude.ai export
+(no API — it needs their browser session and their inbox), and decide what is
+too private to ingest.
+
+Every such step declares five fields, and the split between two of them is the
+whole design:
+
+| field | rule |
+|---|---|
+| `title` | short label |
+| `why` | why a person is needed — the agent may explain this freely |
+| `ask` | **the agent's own voice.** Tone should match the conversation already happening. |
+| `verbatim` | **relayed exactly.** Never paraphrased, never summarised. |
+| `resolved(ctx)` | a predicate over detected state |
+
+`ask` and `verbatim` look redundant and are not. "Ask your user to export their
+claude.ai data" gets paraphrased into something a non-technical person cannot
+act on — so the click path does not get to be paraphrased, while the framing
+around it should adapt to the person.
+
+**Done is detected, never marked.** `resolved()` reads the disk. Nobody ticks a
+box, and an agent cannot close a step by assuming it worked.
+
+**Steps are mirrored to disk** at `<brain>/.exposurie/pending/<id>.md`. Auto mode
+blows past the terminal; a file is still there tomorrow. The file deletes itself
+once detection says the step is done.
+
+**Steps repeat until resolved.** Every command re-reports every open step at the
+top of its output. The failure being prevented is not "the user was never asked"
+— it is "the step got buried and nothing ever came back to it."
+
+**Steps never block.** Every rendering says so in those words.
+
+---
+
+## `--json`
+
+Every command that returns data supports `--json`. Default output stays prose,
+because a model reads it fine and it costs fewer tokens than the same content in
+braces and quotes. JSON is for programmatic callers, not for the agent.
+
+---
+
+## Adding a command
+
+1. Return `{ code, state, pending, body, json }` — never write to stdout yourself.
+   There is exactly one writer (`render`) and one place the exit code is chosen,
+   so the contract cannot be bypassed by a command author.
+2. Set `state.self = '<your command>'` so the nudge does not point at you.
+3. Anything a person must do goes in the `STEPS` catalog in `pending.js` — never
+   inline, so all human-facing wording stays reviewable in one place.
+4. Add a test that pins whatever rule your command could break.

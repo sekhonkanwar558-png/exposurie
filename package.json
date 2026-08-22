@@ -1,0 +1,32 @@
+{
+  "name": "@sekhon/exposurie",
+  "version": "0.0.0",
+  "description": "exposurie by sekhon — an external brain your coding agent builds, curates and reads for you.",
+  "type": "module",
+  "bin": {
+    "exposurie": "bin/exposurie.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "author": "sekhon",
+  "license": "MIT",
+  "private": true,
+  "keywords": [
+    "memory",
+    "agent",
+    "claude-code",
+    "codex",
+    "cursor",
+    "mcp",
+    "second-brain"
+  ]
+}
