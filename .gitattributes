@@ -1,0 +1,9 @@
+# This package ships a shebang executable and must run on macOS and Linux.
+# A CRLF on the shebang line makes the kernel look for an interpreter named
+# "node\r", which does not exist — the command dies with a confusing
+# "env: node: No such file or directory" on every non-Windows machine.
+# Committed line endings are therefore LF, always, regardless of who commits.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.zip binary
