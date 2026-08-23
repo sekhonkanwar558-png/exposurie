@@ -18,6 +18,8 @@
 //     is attached to output it already reads, not to documentation we hope it
 //     read once.
 
+import { SYNC, exists } from './commands/names.js';
+
 const INDENT = '  ';
 
 function pad(s, w) {
@@ -71,9 +73,14 @@ export function stateLine(s = {}) {
   if (s.lastBackup === null) bits.push('backup never');
   out.push(`exposurie  ${bits.join(' · ')}`);
 
-  // Nudge only when it is earned, so the arrow keeps meaning something.
-  if ((s.unfiled > 0 || (s.lastSyncDays ?? 0) >= 7) && s.self !== 'sync') {
-    out.push('           -> RUN: exposurie sync');
+  // Nudge only when it is earned, so the arrow keeps meaning something — and
+  // only while the command it names exists. The numbers are the mechanism; the
+  // arrow is the call to action, and an arrow pointing at a command that is not
+  // built teaches an agent that the arrow is decoration. It switches itself on
+  // in the same change that adds the command.
+  const earned = s.unfiled > 0 || (s.lastSyncDays ?? 0) >= 7;
+  if (earned && s.self !== SYNC && exists(SYNC)) {
+    out.push(`           -> RUN: exposurie ${SYNC}`);
   }
   return out;
 }
@@ -101,7 +108,10 @@ export function planBlock(steps) {
       if (step.note) out.push(...wrap(step.note, 70, `${INDENT}    `));
     } else if (step.ask) {
       out.push(`${n} ASK YOUR USER, in your own words:`);
-      out.push(`${INDENT}    "${step.ask}"`);
+      // Wrapped for the same reason the pending block wraps: an unwrapped
+      // sentence gets hard-wrapped by the terminal mid-word, and the words an
+      // agent relays to a person are the last place to allow that.
+      out.push(...wrap(`"${step.ask}"`, 68, `${INDENT}    `));
       out.push(`${INDENT}    Do NOT wait for an answer. Continue to the next step.`);
     } else if (step.read) {
       out.push(`${n} READ: ${step.read}`);
@@ -168,6 +178,8 @@ export function render({ state, pending, body = [], error, code = 0 } = {}) {
   push(pendingBlock(pending));
   push(errorBlock(error));
   push(Array.isArray(body) ? body : [body]);
-  parts.push('');
-  return parts.join('\n');
+  // The exit line is a block of the skeleton like any other, and blocks are
+  // separated by a blank line. The caller appends it, so the separator belongs
+  // here — otherwise the footer reads as the last line of the body.
+  return parts.join('\n') + '\n\n';
 }

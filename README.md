@@ -19,10 +19,11 @@ session, so you can open a fresh one every time and lose nothing.
 - **Read back on demand.** Your agent retrieves pages when it needs them instead
   of carrying everything in every session.
 
-> **Status: early.** The output contract and the machine detector work. The
-> extractor, the librarian and the curator are not built yet. Nothing is
-> published to npm. This repo is public so the design can be read and argued
-> with while it is still cheap to change.
+> **Status: early.** The output contract, the machine detector and `scaffold`
+> work — you can create a brain and it is genuinely yours. The extractor, the
+> librarian and the curator are not built yet, so nothing reads your sessions
+> into pages. Nothing is published to npm. This repo is public so the design
+> can be read and argued with while it is still cheap to change.
 
 ## Install
 
@@ -57,15 +58,19 @@ STATE
 
 DO THESE IN ORDER
   1. RUN:  exposurie scaffold --at ~/brain
+      Creates the brain and copies in the schema, the page templates and the
+      prompt that writes pages — those become the user's, and are never
+      overwritten. Writes nothing else and reads no transcripts.
   2. ASK YOUR USER, in your own words:
-      "Want me to pull in your claude.ai web chats too?"
+      "Your brain is being built from the sessions on this machine right
+      now. Your claude.ai web chats are not on here — want to grab those
+      too? It takes about a minute of clicking, then a wait."
       Do NOT wait for an answer. Continue to the next step.
-  3. RUN:  exposurie mcp-install
 
 EXIT 10 — there is a step for your user. Nothing has failed.
 ```
 
-Three consequences fall out of that, and they are the design:
+Four consequences fall out of that, and they are the design:
 
 **Nothing ever prompts.** When an agent runs a command there is nobody at the
 keyboard. A tool that waits for input does not get input — it hangs, and the
@@ -80,6 +85,12 @@ or two things your agent genuinely cannot do for you — mainly requesting your
 claude.ai export, which needs your browser and your inbox — get re-reported at
 the top of every command until the file actually appears on disk. They never
 block anything.
+
+**It never names a command it does not have.** Where the build stops, the output
+says so in words. An agent that follows a plan into "no such command" has
+learned the plan is not worth following, and it does not un-learn that when the
+command ships — so a test greps every plan the tool can print and checks each
+command against the real command table.
 
 The full spec is in [`docs/output-contract.md`](docs/output-contract.md).
 
@@ -102,6 +113,18 @@ deliberately yours — a researcher's brain and a founder's brain want different
 page types, and locking the one file that most needs to change is the wrong
 trade. It ships as a starting point, not a fixture.
 
+**"Yours" is enforced, not promised.** `scaffold` never overwrites a file that
+exists. Run it again and it tops up what is missing and prints what it left
+alone, so a schema you have tuned cannot be silently replaced by a command that
+looks idempotent. A test pins that.
+
+**The two halves meet at one config file**, at `<brain>/.exposurie/config.json`.
+The code hardcodes nothing about your folder layout — it reads the category
+names from there. So if `wiki/people` suits you better, rename the folder, say
+so in that file, and search follows you. Without that seam the failure is
+silent: renaming a folder would make half the brain invisible with nothing
+reporting it.
+
 ## Privacy
 
 Your brain is **local files on your disk.** Nothing is uploaded, there is no
@@ -121,10 +144,13 @@ npm test
 
 Zero runtime dependencies. Node 20+.
 
-Two tests are worth knowing about, because they enforce rules rather than check
-behaviour: one greps all source for anything that reads stdin, and one scans
-every file in the repo for personal data, private paths or private tooling. Both
-have companion tests proving they actually catch a violation.
+Four of these enforce rules rather than check behaviour, and each was verified
+by breaking the thing it guards and watching it fail:
+
+- nothing in the shipped source can read stdin
+- no personal data, private path or private tooling in any file in the repo
+- `scaffold` cannot overwrite a file you have edited
+- no output can name a command the tool does not have
 
 ## License
 

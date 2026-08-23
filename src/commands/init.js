@@ -5,18 +5,15 @@
 // what acts, and the agent is what talks to the person. Nothing here waits for
 // input, and the human step is never a gate.
 
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { detect, tilde } from '../context.js';
 import { unresolved, record } from '../pending.js';
-import { block, planBlock } from '../output.js';
+import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
-
-const DEFAULT_VAULT = join(homedir(), 'brain');
+import { DEFAULT_VAULT, expandPath, vaultState } from '../vault.js';
 
 export function init({ at } = {}) {
   const d = detect();
-  const vault = d.vault || at || DEFAULT_VAULT;
+  const vault = d.vault || expandPath(at) || DEFAULT_VAULT;
 
   const rows = [];
   rows.push(['brain', d.vault ? tilde(d.vault) : `not created  (will go at ${tilde(vault)})`]);
@@ -48,26 +45,44 @@ export function init({ at } = {}) {
     steps.push({
       run: `exposurie scaffold --at ${tilde(vault)}`,
       note:
-        `Builds the brain from the ${d.sessions} readable session${d.sessions === 1 ? '' : 's'} above. ` +
-        `Reads conversation only — never tool output — and is resumable if it stops.`,
+        `Creates the brain and copies in the schema, the page templates and the ` +
+        `prompt that writes pages — those become the user's, and are never ` +
+        `overwritten. Writes nothing else and reads no transcripts.`,
     });
   }
   for (const p of open) {
     steps.push({ ask: p.ask });
   }
-  steps.push({ run: 'exposurie mcp-install', note: 'Registers the brain with every client detected above.' });
 
   // Mirror to disk only once there is a vault to mirror into; until then the
   // step rides the output, which is the only surface that exists.
   if (d.vault) for (const p of open) record(d.vault, p);
 
+  // Saying where the build actually stops, rather than naming a command that
+  // does not exist yet. An agent handed a plan whose steps fail learns that the
+  // plan is not worth following — and that lesson is not undone by shipping the
+  // command later.
+  const frontier = [
+    '',
+    'NOT IN THIS VERSION',
+    ...wrap(
+      `${d.sessions} readable session${d.sessions === 1 ? '' : 's'} are on this machine and ` +
+        `none of them have been read. Reading them into pages is not built yet, so do ` +
+        `not invent a command for it — scaffold is where this version stops.`,
+      74,
+      '  ',
+    ),
+  ];
+
   return {
     code: open.length ? HUMAN : OK,
-    state: d.vault
-      ? { vault: d.vault, pages: 0, lastSyncDays: null, self: 'init' }
-      : { vault: null, self: 'init' },
+    state: vaultState(d.vault, 'init'),
     pending: open,
-    body: [...block('STATE', rows), '', ...planBlock(steps)],
+    body: [
+      ...block('STATE', rows),
+      ...(steps.length ? ['', ...planBlock(steps)] : []),
+      ...frontier,
+    ],
     json: {
       brain: d.vault,
       plannedVault: vault,

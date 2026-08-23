@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { stateLine, planBlock, pendingBlock, render, block, wrap } from '../src/output.js';
 import { STEPS, unresolved } from '../src/pending.js';
 import { OK, HUMAN, footer } from '../src/exit-codes.js';
+import { SYNC, exists } from '../src/commands/names.js';
 import { init } from '../src/commands/init.js';
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -62,9 +63,22 @@ test('a human step in a plan never reads as a stopping point', () => {
 // ---------------------------------------------------------------- rule 4
 test('RULE 4: the sync nudge rides output, but never inside its own command', () => {
   const stale = { vault: '/b', pages: 10, unfiled: 6, lastSyncDays: 9 };
-  assert.match(stateLine(stale).join('\n'), /RUN: exposurie sync/);
-  // ...and must not fire while the user is already running sync.
-  assert.doesNotMatch(stateLine({ ...stale, self: 'sync' }).join('\n'), /RUN: exposurie sync/);
+  const out = stateLine(stale).join('\n');
+
+  // The numbers ride on every command regardless — they are the mechanism, and
+  // they are what makes a stale brain impossible to not notice.
+  assert.match(out, /6 sessions unfiled/);
+  assert.match(out, /last sync 9d ago/);
+
+  // The arrow is the call to action, and it only exists once there is an action.
+  if (exists(SYNC)) {
+    assert.match(out, new RegExp(`RUN: exposurie ${SYNC}`));
+    // ...and must not fire while the user is already running sync.
+    assert.doesNotMatch(stateLine({ ...stale, self: SYNC }).join('\n'), /RUN: exposurie/);
+  } else {
+    assert.doesNotMatch(out, /->/, 'pointed at a command this version does not have');
+  }
+
   assert.doesNotMatch(stateLine({ vault: null, self: 'init' }).join('\n'), /RUN: exposurie init/);
 });
 

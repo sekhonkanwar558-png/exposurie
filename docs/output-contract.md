@@ -40,6 +40,19 @@ Not "open the page" — the exact argv that opens it. A wikilink is a human
 convention; a command is a thing the agent can execute. If output mentions
 something the agent might want next, it carries the literal invocation.
 
+### 3b. Never print a command the tool does not have
+
+A corollary of rule 3, and it needed its own line because it was broken first.
+`init` printed `RUN: exposurie scaffold` while no such command existed, so an
+agent following the plan hit "no such command" and had nothing to do with that.
+
+**An agent taught once that the plan is not to be trusted does not un-learn it
+when the command ships.** So the command table lives in one place —
+`src/commands/registry.js` — the dispatcher and the help text both read it, and
+a test greps every plan the tool can print and asserts each named command is in
+it. Where the build genuinely stops, output says so in words instead of naming
+a command that would fail.
+
 ### 4. The directive rides the output
 
 Anything the agent must keep doing is attached to output it is **already
@@ -64,8 +77,15 @@ ERROR                        only on failure
 EXIT n — <what that means in words>
 ```
 
-Blank line between blocks. No colour, no box drawing, no spinners — they cost
-tokens and survive nothing.
+Blank line between blocks, the exit line included — it is a block like any
+other, and run together with the body it reads as the body's last sentence. No
+colour, no box drawing, no spinners — they cost tokens and survive nothing.
+
+**Prose wraps; commands do not.** Anything a person will hear or read is wrapped
+before printing, because a terminal hard-wrapping a relayed sentence mid-word is
+the last place to be sloppy. A `FIX:` line is the exception — it carries a
+command, and a wrapped command is a broken command — so it is printed as-is and
+a test pins every fix short enough to fit.
 
 ---
 

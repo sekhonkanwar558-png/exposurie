@@ -2,27 +2,14 @@
 // Entry point. Thin on purpose: parse, dispatch, render, exit.
 //
 // There is exactly one writer to stdout (render) and one place the exit code is
-// chosen, so the output contract cannot be bypassed by a command author.
+// chosen, so the output contract cannot be bypassed by a command author. The
+// command table lives in src/commands/registry.js, which is also what the help
+// text and the tests read — a command exists in one place or not at all.
 
 import { parseArgs } from 'node:util';
 import { render } from '../src/output.js';
-import { OK, ERROR, USAGE, footer } from '../src/exit-codes.js';
-import { init } from '../src/commands/init.js';
-
-const HELP = [
-  'exposurie — an external brain your coding agent builds, curates and reads.',
-  '',
-  'COMMANDS',
-  '  init            report what is on this machine and what to do about it',
-  '  help            this',
-  '',
-  'FLAGS',
-  '  --at <path>     where the brain should live (default ~/brain)',
-  '  --json          machine-readable output instead of the task list',
-  '',
-  'NOTHING HERE EVER PROMPTS. Every command runs to completion and exits.',
-  'Exit 10 means a step needs a person — it does NOT mean anything failed.',
-];
+import { ERROR, USAGE, footer } from '../src/exit-codes.js';
+import { COMMANDS, NAMES } from '../src/commands/registry.js';
 
 function main(argv) {
   let parsed;
@@ -37,18 +24,17 @@ function main(argv) {
   }
 
   const cmd = parsed.positionals[0] ?? (parsed.values.help ? 'help' : 'init');
-
-  switch (cmd) {
-    case 'init':
-      return init({ at: parsed.values.at });
-    case 'help':
-      return { code: OK, body: HELP };
-    default:
-      return {
-        code: USAGE,
-        error: { message: `No command named "${cmd}".`, fix: 'RUN: exposurie help' },
-      };
+  const entry = COMMANDS[cmd];
+  if (!entry) {
+    return {
+      code: USAGE,
+      error: {
+        message: `No command named "${cmd}". This version has: ${NAMES.join(', ')}.`,
+        fix: 'RUN: exposurie help',
+      },
+    };
   }
+  return entry.run(parsed.values);
 }
 
 let result;

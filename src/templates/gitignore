@@ -1,0 +1,8 @@
+# exposurie machine state — regenerated, not content
+.exposurie/state.json
+.exposurie/staged/
+.exposurie/pending/
+
+# OS junk
+.DS_Store
+Thumbs.db
