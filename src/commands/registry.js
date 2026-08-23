@@ -11,6 +11,7 @@
 
 import { init } from './init.js';
 import { scaffold } from './scaffold.js';
+import { sync } from './sync.js';
 import { OK } from '../exit-codes.js';
 import { NAMES } from './names.js';
 
@@ -22,6 +23,10 @@ export const COMMANDS = {
   scaffold: {
     summary: 'create the brain and copy in the files that become yours',
     run: (v) => scaffold({ at: v.at }),
+  },
+  sync: {
+    summary: 'stage what is new so your agent can fold it into the brain',
+    run: (v) => sync({ done: v.done }),
   },
   help: {
     summary: 'this',
@@ -52,6 +57,7 @@ export function helpText() {
     'FLAGS',
     '  --at <path>     where the brain should live (default ~/brain)',
     '  --json          machine-readable output instead of the task list',
+    '  --done          (sync) the pages are written; move the cutoff',
     '',
     'NOTHING HERE EVER PROMPTS. Every command runs to completion and exits.',
     'Exit 10 means a step needs a person — it does NOT mean anything failed.',

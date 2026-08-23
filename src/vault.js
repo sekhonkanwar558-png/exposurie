@@ -42,7 +42,8 @@ export function seamDefaults(version) {
     _readme:
       'This file is yours to edit. exposurie READS the paths in "categories" to ' +
       'find your pages — rename a folder on disk and change it here in the same ' +
-      'edit, or search stops seeing it. Everything else here is policy you own.',
+      'edit, or search stops seeing it. "excludeFiles" is read once file ' +
+      'ingestion ships; everything else here is live policy you own.',
     version,
     categories: {
       sources: 'wiki/sources',
@@ -70,6 +71,10 @@ export function seamDefaults(version) {
       // message, in every project, forever. The fix for crossing this is
       // compression, never a bigger ceiling.
       maxSchemaChars: 40000,
+      // How much conversation one sync stages. Whole sessions only, so a
+      // batch stops before exceeding this rather than splitting one. Sized
+      // from a measured corpus: a median session is ~7,000 characters.
+      batchChars: 120000,
     },
     // What we copied in, and what it looked like when we did. Lets a later
     // version tell "unmodified, safe to offer an update" from "they tuned it".

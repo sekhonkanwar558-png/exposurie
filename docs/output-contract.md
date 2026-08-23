@@ -29,7 +29,7 @@ and the process **exits immediately**.
 
 ### 2. Every actionable line opens with a verb in caps
 
-`RUN:` · `ASK YOUR USER:` · `TELL YOUR USER:` · `READ:`
+`RUN:` · `ASK YOUR USER:` · `TELL YOUR USER:` · `READ:` · `WRITE THE PAGES.`
 
 An instruction buried in prose is an instruction skipped. The keyword is the
 signal that this line is for *doing*, not for reading.

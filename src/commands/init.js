@@ -50,6 +50,15 @@ export function init({ at } = {}) {
         `overwritten. Writes nothing else and reads no transcripts.`,
     });
   }
+  if (d.vault && d.sessions > 0) {
+    steps.push({
+      run: 'exposurie sync',
+      note:
+        `Stages a batch of conversation out of those sessions, newest first, and ` +
+        `hands it back for you to fold into pages. It is resumable, so this can be ` +
+        `run as many times as it takes.`,
+    });
+  }
   for (const p of open) {
     steps.push({ ask: p.ask });
   }
@@ -66,9 +75,10 @@ export function init({ at } = {}) {
     '',
     'NOT IN THIS VERSION',
     ...wrap(
-      `${d.sessions} readable session${d.sessions === 1 ? '' : 's'} are on this machine and ` +
-        `none of them have been read. Reading them into pages is not built yet, so do ` +
-        `not invent a command for it — scaffold is where this version stops.`,
+      'Searching the brain back out of a fresh session, and registering it with your ' +
+        'clients so it is reachable from every project, are not built yet. Reading ' +
+        'pages directly works fine in the meantime — they are plain Markdown. Do not ' +
+        'invent a command for either.',
       74,
       '  ',
     ),

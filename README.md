@@ -19,11 +19,11 @@ session, so you can open a fresh one every time and lose nothing.
 - **Read back on demand.** Your agent retrieves pages when it needs them instead
   of carrying everything in every session.
 
-> **Status: early.** The output contract, the machine detector and `scaffold`
-> work — you can create a brain and it is genuinely yours. The extractor, the
-> librarian and the curator are not built yet, so nothing reads your sessions
-> into pages. Nothing is published to npm. This repo is public so the design
-> can be read and argued with while it is still cheap to change.
+> **Status: early.** `init`, `scaffold` and `sync` work: you can create a brain,
+> and your agent can pull your sessions into it in resumable batches. The
+> librarian (searching it back out) and the curator are not built yet, and
+> nothing is published to npm. This repo is public so the design can be read and
+> argued with while it is still cheap to change.
 
 ## Install
 
@@ -125,6 +125,40 @@ so in that file, and search follows you. Without that seam the failure is
 silent: renaming a folder would make half the brain invisible with nothing
 reporting it.
 
+## What sync actually reads
+
+A transcript is mostly not conversation. Measured across a real 128 MB corpus of
+127 sessions: tool results, tool calls, attachments, file snapshots and thinking
+are about 99% of the bytes. What a person and their agent actually **said** to
+each other is around 1%. Dropping the rest is an **84× reduction that costs
+nothing**, because none of it carries motive — and motive is the whole reason a
+brain is worth having.
+
+The filter that matters most is not the obvious one. Text arrives wearing a
+`user` role that no person typed — injected context, environment blocks, hook
+output, slash-command echoes, tool results, subagent chatter — and on that same
+corpus it outweighed the human's own words **nine to one**. A reader that trusts
+`role: "user"` builds someone a brain mostly out of directory listings, and it
+looks like it is working the entire time.
+
+Three more things sync does because a first run happens before anyone has a
+reason to trust it:
+
+- **Whole sessions, newest first, up to a size budget.** History is never
+  truncated — it is *ordered*, and what did not fit is reported and comes next.
+  A year of history is a series of ordinary batches, not one enormous job
+  against your own plan quota at minute one.
+- **Exclusion is a gate, not a cleanup.** Anything on your exclude list is never
+  opened past the few KB needed to see which folder it belongs to. Filtering
+  after the read is an apology, not a control.
+- **The cutoff moves last, and on evidence.** `sync --done` refuses to advance
+  if nothing in the brain changed, because that means the pages were not
+  written. An interrupted sync re-stages its material rather than losing it.
+
+Anything shaped like an API key is removed on the way in, and the count is
+reported — a silent redaction is indistinguishable from a bug that ate a
+paragraph.
+
 ## Privacy
 
 Your brain is **local files on your disk.** Nothing is uploaded, there is no
@@ -144,13 +178,16 @@ npm test
 
 Zero runtime dependencies. Node 20+.
 
-Four of these enforce rules rather than check behaviour, and each was verified
+Some of these enforce rules rather than check behaviour, and each was verified
 by breaking the thing it guards and watching it fail:
 
 - nothing in the shipped source can read stdin
 - no personal data, private path or private tooling in any file in the repo
 - `scaffold` cannot overwrite a file you have edited
 - no output can name a command the tool does not have
+- text that only looks like something you typed never reaches your brain
+- an excluded conversation is never opened, not merely dropped afterwards
+- the sync cutoff moves on evidence that pages exist, never on a claim
 
 ## License
 

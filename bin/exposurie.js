@@ -17,7 +17,12 @@ function main(argv) {
     parsed = parseArgs({
       args: argv,
       allowPositionals: true,
-      options: { at: { type: 'string' }, json: { type: 'boolean' }, help: { type: 'boolean' } },
+      options: {
+        at: { type: 'string' },
+        json: { type: 'boolean' },
+        help: { type: 'boolean' },
+        done: { type: 'boolean' },
+      },
     });
   } catch (e) {
     return { code: USAGE, error: { message: e.message, fix: 'RUN: exposurie help' } };

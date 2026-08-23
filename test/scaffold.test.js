@@ -234,7 +234,7 @@ test('the sync nudge cannot point at a command that does not exist', () => {
 
 test('an unknown command says which ones exist', () => {
   const h = home();
-  const r = run(h, ['sync']); // a real future command, not built yet
+  const r = run(h, ['librarian']); // a real future command, not built yet
   assert.equal(r.code, 2);
   for (const n of NAMES) assert.match(r.out, new RegExp(n));
 });

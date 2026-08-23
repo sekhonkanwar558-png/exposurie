@@ -7,36 +7,43 @@ than no job at all — nothing tells you it stopped, and the brain rots while th
 tooling reports success. So this runs when a person asks for it, and the state
 line on every command is what stops anyone forgetting.
 
-> **Not in the installed version yet.** The `sync` command described below is
-> not built, so do not try to run it — this file is the procedure it will
-> follow, kept here because the procedure is yours to adjust and predates the
-> command. Everything else in your brain works.
-
 ## Running it
 
-The command does the deterministic half: find what is new since the last run,
-apply the exclusion policy in `.exposurie/config.json`, stage it, and record how
-far it got. **It does not write pages.** Writing pages is an LLM job, and it is
-this file plus `.exposurie/wiki-prompt.md`.
+```
+exposurie sync
+```
+
+That command does the deterministic half: find what is new since the last run,
+apply the exclusion policy in `.exposurie/config.json`, read the conversation
+out of it, and stage a batch. **It does not write pages.** Writing pages is an
+LLM job, and it is this file plus `.exposurie/wiki-prompt.md`.
+
+It stages **whole sessions, newest first, up to a size budget**, so a first run
+over years of history is a series of ordinary batches rather than one enormous
+job. Nothing is dropped — what did not fit is reported and comes next.
 
 ## The procedure
 
-1. **Stage what is new.** It reports what is new and where it staged it. If
+1. **RUN `exposurie sync`.** It reports what is new and where it staged it. If
    nothing is new, say so and stop.
 2. **Read the staged material** and fold it into the wiki, following
    `.exposurie/wiki-prompt.md`. Update existing pages before creating new ones.
 3. **Update `index.md`** for every page created, renamed or deleted.
 4. **Append one entry to `log.md`** describing what was folded in and which
    pages moved.
-5. **Advance the cutoff — only after the pages are actually written.** An
-   abandoned sync must not advance it, or the material it staged is dropped
-   forever with nothing reporting the loss.
+5. **RUN `exposurie sync --done`.** This advances the cutoff, and only then.
 
 ## Two things that are easy to get backwards
 
 **The cutoff is advanced last, not first.** It is the only record of what has
 been read. Moving it before the writing happens converts a crash into permanent
 data loss.
+
+`--done` will refuse if nothing in the brain has changed since the batch was
+staged, because that means the pages were not written. It is checked rather than
+claimed: nobody ticks a box, and an agent cannot close a batch by assuming it
+worked. A refused `--done` costs nothing — the batch is still there, and running
+it again after writing the pages works.
 
 **Exclusion is a gate, not a cleanup.** Anything excluded is excluded *before*
 the read — once material has been read, the cost has been paid and the privacy

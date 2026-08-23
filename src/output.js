@@ -115,6 +115,12 @@ export function planBlock(steps) {
       out.push(`${INDENT}    Do NOT wait for an answer. Continue to the next step.`);
     } else if (step.read) {
       out.push(`${n} READ: ${step.read}`);
+    } else if (step.write) {
+      // The one step in the product that is the agent's own work rather than a
+      // command. It still opens with a verb, because a line without one reads
+      // as commentary and gets skipped.
+      out.push(`${n} WRITE THE PAGES.`);
+      out.push(...wrap(step.write, 70, `${INDENT}    `));
     }
   });
   return out;
