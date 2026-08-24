@@ -331,3 +331,43 @@ test('the state line stops claiming there is no brain, and drops the arrow', () 
   assert.ok(!/no brain yet/.test(r.out), 'we cannot tell — saying so is a guess');
   assert.ok(!/-> RUN: exposurie init/.test(r.out), 'no command repairs this; the arrow would lie');
 });
+
+// --------------------------------------------------- the frontier tells truth
+//
+// `init` prints a NOT IN THIS VERSION block. It rotted once in the direction
+// nobody checks: it went on denying `read` and the client pointer for a whole
+// release after both shipped, while `scaffold` printed the REACH table three
+// lines below it. Denying a capability we have is the same lie as promising one
+// we lack, so the block is pinned against what is actually built.
+
+function frontier(out) {
+  const i = out.indexOf('NOT IN THIS VERSION');
+  if (i === -1) return '';
+  const rest = out.slice(i);
+  const end = rest.indexOf('EXIT');
+  return (end === -1 ? rest : rest.slice(0, end)).toLowerCase();
+}
+
+test('the frontier never denies a capability that ships', () => {
+  const h = home();
+  const f = frontier(run(h, ['init']).out);
+
+  // Every command in the table is, by definition, built.
+  for (const name of NAMES) {
+    if (name === 'help') continue;
+    assert.ok(
+      !f.includes(`exposurie ${name}`),
+      `the frontier names \`${name}\`, which is in the command table`,
+    );
+  }
+  // The two capabilities it wrongly denied, by the words it used for them.
+  assert.ok(!f.includes('searching the brain'), 'read --search is built');
+  assert.ok(!f.includes('registering it with your clients'), 'the pointer is built');
+});
+
+test('the frontier still names something, so it does not become decoration', () => {
+  const h = home();
+  const f = frontier(run(h, ['init']).out);
+  assert.ok(f.length > 40, 'an empty frontier teaches an agent to stop reading it');
+  assert.ok(f.includes('curat'), 'the curator is the real frontier now');
+});

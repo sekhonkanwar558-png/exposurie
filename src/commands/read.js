@@ -90,13 +90,16 @@ export function read(values = {}, positionals = []) {
     const { total, shown } = runSearch(vault, seam, values.search);
     const body = [];
     if (total === 0) {
-      body.push(`TOTAL: 0 pages match ${q(values.search)} — searched ${pages.length} pages.`);
+      body.push(
+        `TOTAL: 0 pages match ${q(values.search)} — searched ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}.`,
+      );
       body.push('');
       body.push('Nothing in the brain matches. Say so plainly; do not answer from memory.');
       return { code: OK, state, body };
     }
     body.push(
-      `TOTAL: ${total} ${total === 1 ? 'page matches' : 'pages match'} ${q(values.search)} (searched ${pages.length} pages).`,
+      `TOTAL: ${total} ${total === 1 ? 'page matches' : 'pages match'} ${q(values.search)} ` +
+        `(searched ${pages.length} ${pages.length === 1 ? 'page' : 'pages'}).`,
     );
     if (shown.length < total) {
       body.push(`Showing ${shown.length}. Do NOT describe this list as complete.`);

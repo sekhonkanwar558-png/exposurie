@@ -89,14 +89,20 @@ export function init({ at } = {}) {
   // does not exist yet. An agent handed a plan whose steps fail learns that the
   // plan is not worth following — and that lesson is not undone by shipping the
   // command later.
+  //
+  // It rots the other way too, which is what happened: this block went on
+  // denying `read` and the client pointer for a whole release after both
+  // shipped, while `scaffold` printed the REACH table three lines below it.
+  // Denying a capability we have is the same lie as promising one we lack, so
+  // a test now pins this text against the command table.
   const frontier = [
     '',
     'NOT IN THIS VERSION',
     ...wrap(
-      'Searching the brain back out of a fresh session, and registering it with your ' +
-        'clients so it is reachable from every project, are not built yet. Reading ' +
-        'pages directly works fine in the meantime — they are plain Markdown. Do not ' +
-        'invent a command for either.',
+      'Curating the brain as it grows is not built yet — merging pages that say the ' +
+        'same thing, catching two pages that disagree, and retiring what a newer ' +
+        'session superseded. Everything here fills the brain and reads it back; ' +
+        'nothing yet prunes it. Do not invent a command for that.',
       74,
       '  ',
     ),
