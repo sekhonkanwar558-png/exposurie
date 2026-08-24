@@ -12,6 +12,7 @@
 import { init } from './init.js';
 import { scaffold } from './scaffold.js';
 import { sync } from './sync.js';
+import { read } from './read.js';
 import { OK } from '../exit-codes.js';
 import { NAMES } from './names.js';
 
@@ -27,6 +28,10 @@ export const COMMANDS = {
   sync: {
     summary: 'stage what is new so your agent can fold it into the brain',
     run: (v) => sync({ done: v.done }),
+  },
+  read: {
+    summary: 'open a page, one section of it, or find which page holds a thing',
+    run: (v, pos) => read(v, pos),
   },
   help: {
     summary: 'this',
@@ -58,6 +63,16 @@ export function helpText() {
     '  --at <path>     where the brain should live (default ~/brain)',
     '  --json          machine-readable output instead of the task list',
     '  --done          (sync) the pages are written; move the cutoff',
+    '',
+    'READING',
+    '  exposurie read "<page>"                     the page, or a map if large',
+    '  exposurie read "<page>" --section "<name>"  one section of it',
+    '  exposurie read "<page>" --outline           the map, whatever the size',
+    '  exposurie read "<page>" --full              the whole page regardless',
+    '  exposurie read --search "<query>"           which page holds a thing',
+    '',
+    '  A large page returns a MAP, not the page — every line of it carries the',
+    '  exact command that opens that section. You never have to build one.',
     '',
     'NOTHING HERE EVER PROMPTS. Every command runs to completion and exits.',
     'Exit 10 means a step needs a person — it does NOT mean anything failed.',

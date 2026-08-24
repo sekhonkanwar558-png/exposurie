@@ -22,6 +22,11 @@ function main(argv) {
         json: { type: 'boolean' },
         help: { type: 'boolean' },
         done: { type: 'boolean' },
+        section: { type: 'string' },
+        nth: { type: 'string' },
+        search: { type: 'string' },
+        outline: { type: 'boolean' },
+        full: { type: 'boolean' },
       },
     });
   } catch (e) {
@@ -39,7 +44,7 @@ function main(argv) {
       },
     };
   }
-  return entry.run(parsed.values);
+  return entry.run(parsed.values, parsed.positionals.slice(1));
 }
 
 let result;

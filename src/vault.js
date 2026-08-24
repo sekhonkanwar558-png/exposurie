@@ -64,9 +64,16 @@ export function seamDefaults(version) {
     // needs no configuration, and covers the common case on its own.
     gitReposAreProjects: true,
     guards: {
-      // Retrieval returns pages, so a page that is too long to open is a page
-      // that gets answered from its headings instead of its content.
-      maxPageLines: 300,
+      // How much ONE read may spend before the body is replaced by a map of
+      // commands. Not a limit on how long a page may be: a page may be any
+      // length its subject deserves, and the owner of the brain this was
+      // designed against ruled exactly that -- "theres not a hard rule like
+      // 300 lines, it can be even 500, but what matters more is whether we are
+      // able to access each and every point of brain." Lines were always a
+      // proxy for spend; characters are the spend. What this guards is cost
+      // per retrieval, and reachability is guaranteed separately, by every
+      // outline carrying the command that opens each section.
+      maxReadChars: 16000,
       // Whatever sits in an always-loaded instruction file is paid on every
       // message, in every project, forever. The fix for crossing this is
       // compression, never a bigger ceiling.
