@@ -1,0 +1,26 @@
+# Findings you have reviewed and decided are correct as they are.
+#
+# Some findings are TRUE and still right to leave alone. The usual case is a
+# page title that is also an ordinary English word: it gets written in prose all
+# the time, and linking it would draw an edge between two unrelated things —
+# worse than the missing edge it claims to fix.
+#
+# Reported forever, those put a permanent floor under the count, and a report
+# that can never reach zero is a report nobody reads. Retiring them here is what
+# lets the count mean something.
+#
+# ONE LINE PER RETIREMENT. exposurie prints the exact line to paste:
+#
+#     <path>|<KIND>|<detail>
+#
+# <detail> is the page title for UNLINKED, the link target for DEADLINK, the
+# heading for UNREACHABLE, and empty for findings about a whole file.
+#
+#     wiki/entities/Substack.md|UNLINKED|Cadence
+#     wiki/entities/Long Page.md|OVERSIZE|
+#
+# Blank lines and lines starting with # are ignored, so write down WHY. In a
+# year the reason is the only part that still matters.
+#
+# Nothing here is hidden: the number of retired findings is printed on every
+# run. Retire a finding you have judged, never one you have not read.

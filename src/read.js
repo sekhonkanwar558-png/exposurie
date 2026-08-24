@@ -147,6 +147,38 @@ export function sliceSection(text, heads, hit) {
 }
 
 /**
+ * The `--nth` each heading needs, or null when its name is unique.
+ *
+ * ONE definition, shared by the outline that PRINTS these commands and the
+ * curator that CHECKS them. Two copies of this rule is two rules, and the
+ * checker would then be validating its own opinion rather than the librarian's
+ * behaviour — which is the same as no check at all.
+ *
+ * Counted over EVERY heading, including the H1 that never gets listed, because
+ * the counter has to see exactly what findSection sees. Counting only the
+ * listed ones was wrong in one entirely ordinary shape: a page with a section
+ * named after itself — `# Cadence` with a `## Cadence` further down. The H1 is
+ * not listed, so the H2 looked unique, so no `--nth` was printed, so the
+ * command matched two headings and returned neither. Nothing errored and the
+ * outline looked complete; the section had simply left the brain. Found by the
+ * curator's reachability pass, which is the entire reason that pass exists.
+ */
+export function nthFor(heads) {
+  const key = (h) => h.text.trim().toLowerCase();
+  const counts = new Map();
+  for (const h of heads) counts.set(key(h), (counts.get(key(h)) || 0) + 1);
+  const seen = new Map();
+  const out = new Map();
+  for (const h of heads) {
+    const k = key(h);
+    const n = (seen.get(k) || 0) + 1;
+    seen.set(k, n);
+    out.set(h, counts.get(k) > 1 ? n : null);
+  }
+  return out;
+}
+
+/**
  * The outline: what an agent gets instead of a body it may not spend.
  *
  * Every line carries the command that fetches it. This is the file's reason for
@@ -166,23 +198,13 @@ export function outlineBlock(title, text, heads) {
   // It is dropped from what gets LISTED, never from what gets measured: section
   // bounds are computed against the full heading list, because a section that
   // ends at an H1 must still end there and not run to the foot of the file.
-  const listed = heads.filter((h) => h.level > 1);
-  const counts = new Map();
-  for (const h of listed) {
-    const key = h.text.trim().toLowerCase();
-    counts.set(key, (counts.get(key) || 0) + 1);
-  }
-  const seen = new Map();
-
-  for (const h of listed) {
-    const key = h.text.trim().toLowerCase();
-    const n = (seen.get(key) || 0) + 1;
-    seen.set(key, n);
-    const dup = counts.get(key) > 1;
+  const nth = nthFor(heads);
+  for (const h of heads) {
+    if (h.level <= 1) continue; // counted by nthFor, deliberately not listed
     const size = sliceSection(text, heads, h).length;
     const indent = '  '.repeat(Math.max(0, h.level - 1));
     out.push(`${indent}${h.text}   [${size} chars]`);
-    out.push(`${indent}  ${sectionCmd(title, h.text, dup ? n : null)}`);
+    out.push(`${indent}  ${sectionCmd(title, h.text, nth.get(h))}`);
   }
   return out;
 }

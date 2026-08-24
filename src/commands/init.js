@@ -99,10 +99,10 @@ export function init({ at } = {}) {
     '',
     'NOT IN THIS VERSION',
     ...wrap(
-      'Curating the brain as it grows is not built yet — merging pages that say the ' +
-        'same thing, catching two pages that disagree, and retiring what a newer ' +
-        'session superseded. Everything here fills the brain and reads it back; ' +
-        'nothing yet prunes it. Do not invent a command for that.',
+      'Only conversation is read — the sessions on this machine. Files are not: ' +
+        'notes, documents and PDFs dropped into the brain are stored and linked, ' +
+        'never ingested, and a claude.ai export is detected and asked for but is ' +
+        'not yet folded in either. Do not invent a command for that.',
       74,
       '  ',
     ),

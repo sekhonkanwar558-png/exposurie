@@ -363,11 +363,15 @@ test('the frontier never denies a capability that ships', () => {
   // The two capabilities it wrongly denied, by the words it used for them.
   assert.ok(!f.includes('searching the brain'), 'read --search is built');
   assert.ok(!f.includes('registering it with your clients'), 'the pointer is built');
+  // The third one it went on denying after it shipped. Curation is a stage of
+  // sync rather than a command, which is exactly the shape that rots here: no
+  // entry in the command table names it, so nothing else would catch the lie.
+  assert.ok(!f.includes('curat'), 'the curator ships inside sync');
 });
 
 test('the frontier still names something, so it does not become decoration', () => {
   const h = home();
   const f = frontier(run(h, ['init']).out);
   assert.ok(f.length > 40, 'an empty frontier teaches an agent to stop reading it');
-  assert.ok(f.includes('curat'), 'the curator is the real frontier now');
+  assert.ok(f.includes('file'), 'file ingestion is the real frontier now');
 });

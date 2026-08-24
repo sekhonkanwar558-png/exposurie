@@ -47,6 +47,12 @@ const COPY = [
   ['log.md', 'log.md', 'the activity log'],
   ['wiki-prompt.md', join('.exposurie', 'wiki-prompt.md'), 'how pages get written'],
   ['sync.md', join('.exposurie', 'sync.md'), 'the sync procedure'],
+  // The curator's half that needs a reader, and the record of what has already
+  // been judged. Both are copied at SCAFFOLD rather than on first use, because
+  // curation starts with the first batch — a brain only curated once the mess
+  // exists is a brain where the mess got there first.
+  ['curate.md', join('.exposurie', 'curate.md'), 'the curation procedure'],
+  ['curate-allow.txt', join('.exposurie', 'curate-allow.txt'), 'findings judged correct as-is'],
   // The source file is `gitignore` with no dot, and it has to stay that way:
   // npm renames a `.gitignore` inside a published package to `.npmignore`, so
   // a dotted source file would simply not arrive on a user's machine — and the

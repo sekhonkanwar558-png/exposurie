@@ -19,11 +19,13 @@ session, so you can open a fresh one every time and lose nothing.
 - **Read back on demand.** Your agent retrieves pages when it needs them instead
   of carrying everything in every session.
 
-> **Status: early.** `init`, `scaffold` and `sync` work: you can create a brain,
-> and your agent can pull your sessions into it in resumable batches. The
-> librarian (searching it back out) and the curator are not built yet, and
-> nothing is published to npm. This repo is public so the design can be read and
-> argued with while it is still cheap to change.
+> **Status: early.** The chain works end to end — `init`, `scaffold`, `sync` and
+> `read`. You can create a brain, fill it from your own sessions in resumable
+> batches, and open any page or any section of one in a single command. Curation
+> runs inside every sync. Files are not ingested yet: only conversation is read,
+> and a claude.ai export is asked for but not yet folded in. Nothing is published
+> to npm. This repo is public so the design can be read and argued with while it
+> is still cheap to change.
 
 ## Install
 
@@ -104,9 +106,9 @@ to two places with two owners:
 |---|---|
 | the librarian (search, page, section) | the schema |
 | the extractor | the sync procedure |
-| the MCP server | **the wiki-building prompt** |
-| the checker | page templates, exclude list |
-| the config reader | every page you have |
+| the curator's checks, and its two safe fixes | **the wiki-building prompt** |
+| the pointer that tells your agent this exists | the curation procedure, and the findings you have retired |
+| the config reader | page templates, exclude list, every page you have |
 
 The wiki-building prompt is the closest thing here to secret sauce, and it is
 deliberately yours — a researcher's brain and a founder's brain want different
@@ -158,6 +160,40 @@ reason to trust it:
 Anything shaped like an API key is removed on the way in, and the count is
 reported — a silent redaction is indistinguishable from a bug that ate a
 paragraph.
+
+## One command, and curation rides inside it
+
+After setup there is **one command you ever type**. Everything that makes the
+brain better is a stage of it rather than a sibling to it, and curation runs
+from the very first batch — a brain that only gets curated once the mess exists
+is a brain where the mess got there first.
+
+The tool does the half a machine can decide: dead links, index drift, dates that
+lie about freshness, pages nothing links to, sections the librarian cannot open.
+It applies exactly two fixes without asking, both provably additive — bumping an
+`updated:` date git proves is wrong, and wrapping a first plain mention in
+`[[ ]]`. **It never deletes anything and never proposes deleting anything.**
+Curation here means sorting signal from noise so the brain is *fetched* better,
+never holding less.
+
+Everything else is reported, because everything else needs a judgement: whether
+a dead link wants a new page or a corrected spelling, what an index line should
+say, where a long page should be cut. Two pages that disagree, a claim a newer
+session superseded, a concept named on five pages that has none of its own — that
+half is a procedure file in your brain, so you can change it.
+
+Two things it deliberately does not do:
+
+- **It has no page-size limit.** Length was always a proxy. What is actually
+  checked is whether every point of the brain can still be *reached* — and the
+  outline of a long page carries the exact command that opens each section, so a
+  long page is fine. Size is reported as a number, never as a finding.
+- **It lets a finding be retired.** Some findings are true and still correct to
+  leave alone: a page title that is also an ordinary English word gets written
+  in prose constantly, and linking it would draw an edge between unrelated
+  things. Reported forever, those put a floor under the count — and a report
+  that can never reach zero is a report nobody reads. The tool prints the exact
+  line that retires one, and always prints how many are retired.
 
 ## Privacy
 

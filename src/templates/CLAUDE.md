@@ -69,8 +69,11 @@ tags: []
   a side.
 - **Absolute dates always.** "Last week" is meaningless to a page read in a
   year. Convert on the way in.
-- **Split a page past ~300 lines.** Many small focused pages beat few sprawling
-  ones, because retrieval returns pages.
+- **One page is one thing.** Split a page when it has stopped being one subject
+  — never because it crossed a line count. There is no length limit here on
+  purpose: what matters is that every point of the brain can still be reached,
+  and a long page whose every section opens in one command is fine. Retrieval
+  returns sections, not just pages.
 
 ## What belongs in here
 
@@ -118,7 +121,16 @@ A single ingest touching 10–15 pages is normal.
 ### Sync
 
 See `.exposurie/sync.md`. It is manual on purpose: run it when asked, never on a
-schedule.
+schedule. **It is the only command there is after setup** — extraction, folding
+and curation are all stages inside it.
+
+### Curate
+
+See `.exposurie/curate.md`. Runs inside every sync, from the first batch onward.
+The tool does the graph half — dead links, index drift, stale dates, orphans,
+unreachable sections — and applies only the two fixes that cannot lose anything.
+The half that needs a reader is yours: contradictions, superseded claims, and
+concepts named on several pages that have no page of their own.
 
 ## index.md
 

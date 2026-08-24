@@ -21,6 +21,14 @@
 //   AND IT MOVES ON EVIDENCE, NOT ON A CLAIM. `--done` checks that the brain
 //   actually changed. Nobody ticks a box, and an agent cannot close a batch by
 //   assuming it worked.
+//
+// AND IT CURATES, EVERY TIME. This is the one command a person types after
+// setup, so everything that makes the brain better lives inside it rather than
+// beside it. Curation is not a phase that starts once the brain is a mess — by
+// then the mess IS the brain — so it runs from the very first batch onward, on
+// exactly one path per invocation: after `--done`, when pages have just been
+// written, and on the nothing-new path, so that typing the command when there
+// is no new material still leaves the brain better than it found it.
 
 import {
   existsSync,
@@ -40,6 +48,7 @@ import { OK, ERROR } from '../exit-codes.js';
 import { readTranscript, describe } from '../extract/transcript.js';
 import { redact } from '../extract/redact.js';
 import { conversationExcluded } from '../extract/exclude.js';
+import { curate, report } from '../curate.js';
 import { readSeam, readState, statePath, vaultState, categoryDirs } from '../vault.js';
 
 const DEFAULT_BATCH_CHARS = 120000;
@@ -121,6 +130,46 @@ function newestPageWrite(vault, seam) {
     }
   }
   return newest;
+}
+
+/**
+ * The curator, run as a stage of this command rather than as a command.
+ *
+ * It applies the two lossless fixes without asking — bumping a date git proves
+ * is wrong, and wrapping a first plain mention in brackets — and reports
+ * everything that needs a judgement. Both halves of that were asked for at once
+ * and pull against each other productively: lossless, and unattended.
+ *
+ * The subtlety is in what our own edits mean to the cutoff. `--done` advances
+ * only when the brain changed since the batch was staged, which is how an
+ * interrupted sync re-stages rather than losing material. A date the curator
+ * bumped is a change to the brain that is NOT the pages being written, so it
+ * would forge exactly that evidence — and a batch would be marked read that
+ * nothing ever read. So when a batch is pending, the watermark moves with our
+ * own edits and the evidence check keeps meaning what it says.
+ */
+function curateStage(vault, seam) {
+  const result = curate(vault, seam, { fix: true });
+  if (result.fixed.length) {
+    const state = readState(vault) || {};
+    if (state.pendingBatch) {
+      writeState(vault, {
+        ...state,
+        pendingBatch: { ...state.pendingBatch, pagesAt: newestPageWrite(vault, seam) },
+      });
+    }
+  }
+  return {
+    body: report(result, vault),
+    json: {
+      pages: result.pages,
+      links: result.links,
+      fixed: result.fixed,
+      broken: result.broken,
+      notice: result.notice,
+      retired: result.suppressed,
+    },
+  };
 }
 
 const noBrain = () => ({
@@ -214,11 +263,27 @@ function stage(vault, d) {
       next.unfiled = 0;
       writeState(vault, next);
     }
+    // Nothing new is not nothing to do. The brain still drifts — links break
+    // when a page is renamed, an index goes out of date, a date lies about
+    // freshness — so the one command a person types still curates.
+    const c = curateStage(vault, seam);
     return {
       code: OK,
       state: { ...vaultState(vault, 'sync'), unfiled: 0 },
-      body: [...block('NOTHING NEW', [['result', 'nothing to stage']]), '', ...wrap(why, 74, '  ')],
-      json: { staged: 0, candidates: candidates.length, excluded: excluded.length, empty: empty.length },
+      body: [
+        ...block('NOTHING NEW', [['result', 'nothing to stage']]),
+        '',
+        ...wrap(why, 74, '  '),
+        '',
+        ...c.body,
+      ],
+      json: {
+        staged: 0,
+        candidates: candidates.length,
+        excluded: excluded.length,
+        empty: empty.length,
+        curate: c.json,
+      },
     };
   }
 
@@ -341,6 +406,13 @@ function done(vault) {
   delete next.pendingBatch;
   writeState(vault, next);
 
+  // Pages have just been written, which is the moment the brain is most likely
+  // to have drifted: new pages nothing links to, links to pages that were never
+  // created, index entries missing. Curating here rather than later is the
+  // whole reason it is a stage — a brain curated only once the mess exists is a
+  // brain where the mess got there first.
+  const c = curateStage(vault, seam);
+
   return {
     code: OK,
     state: { ...vaultState(vault, 'sync'), unfiled: next.unfiled },
@@ -350,11 +422,25 @@ function done(vault) {
         ['sessions', `${batch.sessions} now marked as read`],
         ['still waiting', String(next.unfiled ?? 0)],
       ]),
+      '',
+      ...c.body,
+      '',
+      ...planBlock([
+        { read: join(vault, '.exposurie', 'curate.md') },
+        {
+          write:
+            'Act on the findings above, then do the half no checker can: two pages ' +
+            'that disagree, a claim a newer session superseded, an idea now named on ' +
+            'several pages that deserves its own. Scope it to the pages this batch ' +
+            'touched — that keeps it cheap and continuous rather than a rescue ' +
+            'operation later.',
+        },
+      ]),
       ...(next.unfiled > 0
         ? ['', ...wrap(`${next.unfiled} session${next.unfiled === 1 ? '' : 's'} have not been read yet. Run sync again for the next batch.`, 74, '  ')]
         : []),
     ],
-    json: { advanced: true, batch: batch.id, remaining: next.unfiled ?? 0 },
+    json: { advanced: true, batch: batch.id, remaining: next.unfiled ?? 0, curate: c.json },
   };
 }
 
