@@ -20,6 +20,9 @@
   "author": "sekhon",
   "license": "MIT",
   "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "memory",
     "agent",
