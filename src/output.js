@@ -53,6 +53,13 @@ export function wrap(text, width = 76, indent = '') {
  */
 export function stateLine(s = {}) {
   const out = [];
+  // A third state, between "has a brain" and "has none": we cannot tell. Saying
+  // "no brain yet" here would be a guess, and the arrow under it would send the
+  // user to build a second one. No command repairs this, so no arrow is shown.
+  if (s.brokenPointer) {
+    out.push('exposurie  brain location unknown — the pointer is unreadable');
+    return out;
+  }
   if (!s.vault) {
     out.push('exposurie  no brain yet');
     // Never advertise the command we are already inside. A nudge that fires

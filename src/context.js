@@ -93,12 +93,62 @@ export function findExports() {
 
 export const configPath = () => join(HOME, '.exposurie', 'config.json');
 
-export function readConfig() {
+/**
+ * The pointer file, and an HONEST answer about it.
+ *
+ * This used to be one try/catch returning null, which made a corrupt config
+ * indistinguishable from a machine that has no brain. Every command then said
+ * "no brain yet -> RUN: exposurie init" — a dead end, since init cannot repair
+ * JSON. Worse than useless, in fact: following that advice into `scaffold`
+ * builds a SECOND brain at the default path while the real one sits elsewhere,
+ * still named by the file nothing said was broken.
+ *
+ * A hand-edit or a bad merge is all it takes. So absent and unreadable are now
+ * different answers, and every command that would act on the difference asks.
+ */
+export function configState() {
+  const path = configPath();
+  if (!existsSync(path)) return { status: 'absent', path, config: null };
+
+  let text;
   try {
-    return JSON.parse(readFileSync(configPath(), 'utf8'));
-  } catch {
-    return null;
+    text = readFileSync(path, 'utf8');
+  } catch (e) {
+    return { status: 'unreadable', path, config: null, reason: e.code || 'could not be opened' };
   }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { status: 'unreadable', path, config: null, reason: String(e.message) };
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { status: 'unreadable', path, config: null, reason: 'not a JSON object' };
+  }
+  return { status: 'ok', path, config: parsed };
+}
+
+export function readConfig() {
+  const s = configState();
+  return s.status === 'ok' ? s.config : null;
+}
+
+/**
+ * One error, shared by every command that would otherwise act on a wrong
+ * assumption. It names the file, says what is wrong with it, and states the
+ * consequence — the reason to stop is not tidiness, it is that continuing
+ * orphans a brain.
+ */
+export function brokenConfig(state) {
+  return {
+    message:
+      `The pointer telling exposurie where the brain lives could not be read ` +
+      `(${state.reason}). Nothing was changed, and nothing here is lost. Until ` +
+      `it is valid, a corrupt pointer cannot be told apart from a machine with ` +
+      `no brain at all — and creating a new one would orphan the brain you have.`,
+    fix: `EDIT: ${state.path}   (JSON, holding {"vault": "<path to your brain>"})`,
+  };
 }
 
 /** One call, everything a command needs to decide what to print. */
@@ -109,7 +159,8 @@ export function detect() {
     return { ...c, present, count: files.length, files };
   });
 
-  const config = readConfig();
+  const cfg = configState();
+  const config = cfg.config;
   const vault = config?.vault && existsSync(config.vault) ? config.vault : null;
 
   return {
@@ -117,6 +168,8 @@ export function detect() {
     clients,
     exports: findExports(),
     config,
+    configStatus: cfg.status,
+    configError: cfg.status === 'unreadable' ? cfg : null,
     vault,
     // Only what we can actually parse counts toward the number we promise on.
     sessions: clients.filter((c) => c.readable).reduce((n, c) => n + c.count, 0),

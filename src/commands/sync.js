@@ -34,7 +34,7 @@ import {
 } from 'node:fs';
 import { join, basename } from 'node:path';
 
-import { detect } from '../context.js';
+import { detect, brokenConfig } from '../context.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR } from '../exit-codes.js';
 import { readTranscript, describe } from '../extract/transcript.js';
@@ -360,6 +360,15 @@ function done(vault) {
 
 export function sync({ done: isDone } = {}) {
   const d = detect();
+  // An unreadable pointer is not a machine without a brain. Saying "RUN:
+  // exposurie scaffold" here sends the user to build a second one.
+  if (d.configError) {
+    return {
+      code: ERROR,
+      state: { vault: null, self: 'sync', brokenPointer: true },
+      error: brokenConfig(d.configError),
+    };
+  }
   if (!d.vault) return noBrain();
   return isDone ? done(d.vault) : stage(d.vault, d);
 }

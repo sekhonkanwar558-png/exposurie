@@ -17,7 +17,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { readSeam, vaultState, expandPath, DEFAULT_VAULT } from '../vault.js';
-import { readConfig } from '../context.js';
+import { readConfig, configState, brokenConfig } from '../context.js';
 import { OK, ERROR } from '../exit-codes.js';
 import {
   allPages,
@@ -57,6 +57,16 @@ function findPage(pages, want) {
 }
 
 export function read(values = {}, positionals = []) {
+  // --at names a brain outright, so a broken pointer cannot mislead us and the
+  // flag doubles as the way to keep working while the file is repaired.
+  const cfg = configState();
+  if (cfg.status === 'unreadable' && !expandPath(values.at)) {
+    return {
+      code: ERROR,
+      state: { vault: null, self: 'read', brokenPointer: true },
+      error: brokenConfig(cfg),
+    };
+  }
   const vault = resolveVault(values.at);
   const state = vaultState(vault, 'read');
 

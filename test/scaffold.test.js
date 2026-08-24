@@ -238,3 +238,96 @@ test('an unknown command says which ones exist', () => {
   assert.equal(r.code, 2);
   for (const n of NAMES) assert.match(r.out, new RegExp(n));
 });
+
+test('scaffold puts the pointer where every session will load it', () => {
+  const h = home();
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  writeFileSync(join(h, '.claude', 'CLAUDE.md'), '# mine\n\nkeep this\n', 'utf8');
+
+  run(h, ['scaffold']);
+
+  const global = readFileSync(join(h, '.claude', 'CLAUDE.md'), 'utf8');
+  assert.ok(global.includes('keep this'), 'the user config must survive scaffold');
+  assert.match(global, /exposurie read --search/, 'the pointer must be installed');
+  assert.ok(
+    global.length < 1400,
+    `the global file is paid on every message; got ${global.length} bytes`,
+  );
+});
+
+// ------------------------------------------------------- the corrupt pointer
+//
+// The failure these pin: a config that exists but does not parse used to be
+// indistinguishable from a machine with no brain. Every command then pointed at
+// `exposurie init`, which cannot repair JSON, and following that into scaffold
+// built a SECOND brain while the real one stayed referenced by the broken file.
+
+function corrupt(h) {
+  const p = join(h, '.exposurie', 'config.json');
+  mkdirSync(dirname(p), { recursive: true });
+  // Invalid JSON escapes — exactly what a hand-typed Windows path produces.
+  writeFileSync(p, '{ "vault": "C:' + String.fromCharCode(92) + 'Users' + String.fromCharCode(92) + 'someone' + String.fromCharCode(92) + 'brain" }', 'utf8');
+  return p;
+}
+
+test('scaffold refuses on a corrupt pointer rather than orphaning a brain', () => {
+  const h = home();
+  corrupt(h);
+
+  const r = run(h, ['scaffold']);
+  assert.notEqual(r.code, 0, 'must not exit clean');
+  assert.match(r.out, /could not be read/);
+  assert.match(r.out, /orphan the brain you have/);
+  assert.ok(!existsSync(join(h, 'brain')), 'no second brain may be created');
+});
+
+test('the fix names the file, and is not the old dead end', () => {
+  const h = home();
+  const p = corrupt(h);
+
+  const r = run(h, ['scaffold']);
+  assert.match(r.out, /FIX:  EDIT:/, 'the fix must point at the file');
+  assert.ok(r.out.includes(p) || r.out.includes('config.json'), 'the path must be named');
+  assert.ok(!/FIX:.*RUN: exposurie init/.test(r.out), 'init cannot repair JSON — never offer it');
+});
+
+test('read says the pointer is broken, not that there is no brain', () => {
+  const h = home();
+  corrupt(h);
+
+  const r = run(h, ['read', '--search', 'anything']);
+  assert.notEqual(r.code, 0);
+  assert.match(r.out, /could not be read/);
+  assert.ok(!/no brain on this machine yet/i.test(r.out), 'must not claim the brain is absent');
+});
+
+test('--at keeps working while the pointer is broken', () => {
+  const h = home();
+  corrupt(h);
+
+  const r = run(h, ['scaffold', '--at', join(h, 'mybrain')]);
+  // exit 10 is a pending HUMAN step, which the contract says is not a failure;
+  // what matters is that the brain got built and no error was raised.
+  assert.ok(r.code === 0 || r.code === 10, `unexpected exit ${r.code}`);
+  assert.ok(!/could not be read/.test(r.out), 'an explicit path cannot be misled');
+  assert.ok(existsSync(join(h, 'mybrain', 'CLAUDE.md')));
+});
+
+test('init reports the broken pointer and never offers scaffold', () => {
+  const h = home();
+  corrupt(h);
+
+  const r = run(h, ['init']);
+  assert.match(r.out, /pointer unreadable/);
+  assert.ok(!/RUN: exposurie scaffold/.test(r.out), 'scaffold is the command that would orphan it');
+});
+
+test('the state line stops claiming there is no brain, and drops the arrow', () => {
+  const h = home();
+  corrupt(h);
+
+  const r = run(h, ['scaffold']);
+  assert.match(r.out, /brain location unknown/);
+  assert.ok(!/no brain yet/.test(r.out), 'we cannot tell — saying so is a guess');
+  assert.ok(!/-> RUN: exposurie init/.test(r.out), 'no command repairs this; the arrow would lie');
+});

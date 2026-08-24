@@ -16,7 +16,14 @@ export function init({ at } = {}) {
   const vault = d.vault || expandPath(at) || DEFAULT_VAULT;
 
   const rows = [];
-  rows.push(['brain', d.vault ? tilde(d.vault) : `not created  (will go at ${tilde(vault)})`]);
+  rows.push([
+    'brain',
+    d.configError
+      ? `UNKNOWN — pointer unreadable (${d.configError.reason})`
+      : d.vault
+        ? tilde(d.vault)
+        : `not created  (will go at ${tilde(vault)})`,
+  ]);
 
   for (const c of d.clients) {
     if (!c.present) continue;
@@ -41,7 +48,18 @@ export function init({ at } = {}) {
   const open = unresolved(ctx, ['claude-web-export']);
 
   const steps = [];
-  if (!d.vault) {
+  // Never offer scaffold while the pointer is broken: it is the one command
+  // that would act on the wrong answer and orphan an existing brain.
+  if (d.configError) {
+    steps.push({
+      read: d.configError.path,
+      note:
+        `This file names the brain and is not valid JSON, so exposurie cannot ` +
+        `tell whether a brain exists. Repair it — it holds {"vault": "<path>"} — ` +
+        `and nothing else here is affected.`,
+    });
+  }
+  if (!d.vault && !d.configError) {
     steps.push({
       run: `exposurie scaffold --at ${tilde(vault)}`,
       note:

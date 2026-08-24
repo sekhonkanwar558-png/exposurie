@@ -17,7 +17,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { detect, tilde, configPath } from '../context.js';
+import { detect, tilde, configPath, brokenConfig } from '../context.js';
+import { reachAll } from '../reach.js';
 import { unresolved, record } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
@@ -121,6 +122,18 @@ function writeIfAbsent(path, text) {
 export function scaffold({ at } = {}) {
   const d = detect();
   const asked = expandPath(at);
+
+  // The dangerous one. With an unreadable pointer we cannot see the brain that
+  // already exists, so scaffolding would build a second at the default path and
+  // leave the real one orphaned — holding everything, referenced by nothing.
+  if (d.configError && !asked) {
+    return {
+      code: ERROR,
+      state: { vault: null, self: 'scaffold', brokenPointer: true },
+      error: brokenConfig(d.configError),
+    };
+  }
+
   const target = asked || d.vault || DEFAULT_VAULT;
 
   // One brain per person is a design decision, so a second location is almost
@@ -201,6 +214,11 @@ export function scaffold({ at } = {}) {
     'utf8',
   );
 
+  // The brain's own CLAUDE.md is the schema and it is large on purpose, but it
+  // only loads inside the brain folder — and nobody works there. Without this,
+  // a user's agent sitting in a code repo has no idea a brain exists.
+  const reach = reachAll();
+
   const open = unresolved({ exports: d.exports, obsidianInstalled: false }, ['claude-web-export']);
   // Now that a brain exists, an open step is mirrored to disk as well as
   // printed. Auto mode blows past a terminal; a file is still there tomorrow.
@@ -216,9 +234,26 @@ export function scaffold({ at } = {}) {
 
   const rows = [['brain', tilde(target)], ...created, ['git', gitStatus]];
 
+  const reachRows = reach.map((c) => [
+    c.id,
+    `${c.action} — ${tilde(c.file)}${c.verified ? '' : '   (location unconfirmed)'}`,
+  ]);
+
   const body = [
     ...block(fresh ? 'CREATED' : 'TOPPED UP', rows),
     ...(kept.length ? ['', ...block('KEPT — yours, not touched', kept)] : []),
+    '',
+    'REACH — so the agent knows this exists from any folder',
+    ...(reachRows.length
+      ? block('', reachRows).filter((l) => l.trim() !== '')
+      : ['  no supported client found — nothing written']),
+    ...wrap(
+      'A few hundred bytes per client, between exposurie markers, appended to a ' +
+        'file that otherwise belongs to the user. The schema stays in the brain. ' +
+        'Remove it any time by deleting the marked block.',
+      74,
+      '  ',
+    ),
     '',
     'BACKUP',
     ...wrap(
@@ -257,6 +292,7 @@ export function scaffold({ at } = {}) {
       kept: kept.map(([f]) => f),
       git: gitStatus,
       config: configPath(),
+      reach: reach.map((c) => ({ id: c.id, file: c.file, action: c.action, verified: c.verified })),
       pending: open.map((p) => p.id),
     },
   };
