@@ -22,10 +22,9 @@ session, so you can open a fresh one every time and lose nothing.
 > **Status: early.** The chain works end to end — `init`, `scaffold`, `sync` and
 > `read`. You can create a brain, fill it from Claude Code, Codex, Cursor and
 > your claude.ai chat export in resumable batches, and open any page or any
-> section of one in a single command. Curation runs inside every sync. Files are still not
-> ingested: only conversation is read, so notes, documents and PDFs are stored
-> and linked rather than folded in. The ChatGPT export has a reader that has not
-> yet met a real export — see below. Nothing is published to npm. This repo is
+> section of one in a single command. Curation runs inside every sync, and
+> documents dropped in `raw/` are found and handed to your agent to open. The
+> ChatGPT export has a reader that has not yet met a real export — see below. Nothing is published to npm. This repo is
 > public so the design can be read and argued with while it is still cheap to
 > change.
 
@@ -229,6 +228,36 @@ Shelling out to a `sqlite3` binary would have been shorter and would have failed
 on every machine without one, silently reporting that the person has no Cursor
 history.
 
+## Documents: it finds them, your agent opens them
+
+`scaffold` creates a `raw/` folder. Put anything in it — a lease, lecture notes,
+a contract, a PDF someone sent you — and the next sync finds it and hands it to
+your agent to read.
+
+**exposurie never parses a document and never inlines one.** That sounds like a
+missing feature and is the opposite: "ingest PDFs with no dependencies" is a
+hard problem, and it is *not this problem*. Your agent opens files natively —
+Claude Code, Codex and Cursor all do. So the deterministic half is only ever
+*notice what is new → gate it → point at it*, the same division as everywhere
+else here. One rule, no size threshold to get wrong, and the model reads the
+real bytes rather than our idea of them.
+
+What follows from that:
+
+- **The gate runs before anything is opened.** `excludeFiles` in your config
+  matches anything in `raw/`, and a directory carrying its own `.git` is
+  somebody's project rather than a page of a brain — deterministic, no
+  configuration needed. Both had shipped already and were wired to nothing.
+- **What is withheld is named.** Excluded files, and things nothing can read at
+  all — archives, executables, video — are listed with the reason. A person who
+  put a file in their brain should be told it was left alone, not left to assume
+  it landed.
+- **Files alone are a batch.** Somebody whose brain is entirely documents used to
+  get "nothing has changed since the last sync" while the folder filled up.
+- **A changed file comes back.** A document is not append-only, so there is no
+  offset to resume from; size and modification time are what say "this exact file
+  was already handed over".
+
 ## What sync actually reads
 
 A transcript is mostly not conversation. Measured across a real 128 MB corpus of
@@ -346,6 +375,8 @@ Zero runtime dependencies. Node 20+.
 Some of these enforce rules rather than check behaviour, and each was verified
 by breaking the thing it guards and watching it fail:
 
+- a document is pointed at, never parsed and never inlined
+- an excluded file is named but never opened
 - every client that claims to be readable has a reader behind it
 - the macOS branch of every path table resolves, exercised from Windows
 - a macOS project path survives conversion out of Cursor with its leading slash
