@@ -28,7 +28,6 @@ import {
   writeFileSync,
   readdirSync,
   unlinkSync,
-  readFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 
@@ -406,14 +405,6 @@ export function decline(vault, id, reason) {
     unlinkSync(join(dir(vault), `${id}.md`));
   } catch {}
   return path;
-}
-
-/** What a recorded decline says, for a caller that wants to show it back. */
-export function declineReason(vault, id) {
-  const path = join(declinedDir(vault), `${id}.md`);
-  if (!existsSync(path)) return null;
-  const m = readFileSync(path, 'utf8').match(/^> (.+)$/m);
-  return m ? m[1] : '';
 }
 
 /**
