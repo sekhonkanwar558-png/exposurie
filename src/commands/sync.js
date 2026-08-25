@@ -48,6 +48,7 @@ import { OK, ERROR } from '../exit-codes.js';
 import { describe } from '../extract/transcript.js';
 import { readExports, renderStanding } from '../extract/webchat.js';
 import { readChatGptExports } from '../extract/chatgpt.js';
+import { findNewFiles, renderFiles } from '../extract/files.js';
 import { redact } from '../extract/redact.js';
 import { conversationExcluded } from '../extract/exclude.js';
 import { curate, report } from '../curate.js';
@@ -308,6 +309,10 @@ function stage(vault, d) {
     else eligible.push(cand);
   }
 
+  // Files the person put in their brain. Noticed here rather than in a command
+  // of its own, for the same reason as everything else: there is one command.
+  const rawFiles = findNewFiles(vault, seam, seen);
+
   const empty = [];
   let chars = 0;
   let redactions = {};
@@ -349,7 +354,10 @@ function stage(vault, d) {
     chars += s.chars;
   }
 
-  if (included.length === 0) {
+  // Files alone are a batch. Without this, somebody who only ever drops PDFs in
+  // their brain gets "nothing has changed since the last sync" while the folder
+  // fills up — the same dead end the claude.ai export used to be.
+  if (included.length === 0 && rawFiles.files.length === 0) {
     const why = eligible.length === 0
       ? (excluded.length ? `Nothing new outside your exclude list, which held back ${excluded.length} session${excluded.length === 1 ? '' : 's'}.` : 'Nothing on this machine has changed since the last sync.')
       : `${eligible.length} transcript${eligible.length === 1 ? '' : 's'} changed, but none held any conversation — ` +
@@ -441,7 +449,17 @@ function stage(vault, d) {
   const standingText = renderStanding(web.standing);
   if (standingText) writeFileSync(join(dir, 'standing.md'), standingText, 'utf8');
 
-  writeFileSync(join(dir, 'conversations.md'), renderConversations(id, included), 'utf8');
+  const hasFiles = rawFiles.files.length > 0;
+  if (hasFiles || rawFiles.unreadable.length || rawFiles.excluded.length) {
+    writeFileSync(join(dir, 'files.md'), renderFiles(rawFiles, vault), 'utf8');
+  }
+
+  // A batch can be files only, and then there is no conversation page to write.
+  // Writing an empty one would put a heading in front of nothing and make the
+  // plan read like something went wrong.
+  if (included.length > 0) {
+    writeFileSync(join(dir, 'conversations.md'), renderConversations(id, included), 'utf8');
+  }
   writeFileSync(
     join(dir, 'MANIFEST.md'),
     renderManifest(id, rows, { excluded, empty, remaining, chars, rawTotal, redactions, web }),
@@ -450,12 +468,23 @@ function stage(vault, d) {
 
   // Recorded, not applied: these offsets become the cutoff only once the pages
   // exist. An abandoned sync must re-stage the same material, not skip it.
-  const pending = { id, stagedAt: iso(), files: {}, sessions: included.length };
+  const pending = {
+    id,
+    stagedAt: iso(),
+    files: {},
+    sessions: included.length,
+    rawFiles: rawFiles.files.length,
+  };
   for (const s of included) {
     pending.files[s.path] = { bytes: s.readTo, updatedAt: s.updatedAt, at: iso() };
   }
   for (const e of empty) {
     pending.files[e.path] = { bytes: e.readTo, updatedAt: e.updatedAt, at: iso() };
+  }
+  // A document has no byte offset — it is not append-only — so size and
+  // modification time are what say "this exact file was already handed over".
+  for (const f of rawFiles.files) {
+    pending.files[f.key] = { size: f.size, mtime: f.mtime, at: iso() };
   }
   writeState(vault, {
     ...state,
@@ -467,12 +496,16 @@ function stage(vault, d) {
   const fromWeb = included.filter((s) => s.surface === 'claude.ai' || s.surface === 'chatgpt').length;
   const fromMachine = included.length - fromWeb;
 
-  const summary = [
-    ['batch', id],
-    ['sessions', `${included.length} staged${remaining > 0 ? `, ${remaining} still waiting` : ''}`],
-    // Where a batch came from is not decoration: someone who has only ever used
-    // the web should see their own life in this line, not a zero.
-    [
+  // A batch can be conversation, files, or both. Printing "0 sessions, 0 chars,
+  // 0 from this machine" to somebody whose brain is entirely documents makes a
+  // working sync read like a failed one.
+  const summary = [['batch', id]];
+  if (included.length > 0 || remaining > 0) {
+    summary.push(
+      ['sessions', `${included.length} staged${remaining > 0 ? `, ${remaining} still waiting` : ''}`],
+      // Where a batch came from is not decoration: someone who has only ever
+      // used the web should see their own life in this line, not a zero.
+      [
       'from',
       // Named, not lumped. "3 from the web" tells somebody nothing about their
       // own setup; "3 from claude.ai" is a fact about them.
@@ -486,14 +519,23 @@ function stage(vault, d) {
           .filter(Boolean),
       ].join(', '),
     ],
-    [
-      'conversation',
-      `${chars.toLocaleString('en-US')} chars` +
-        (rawTotal > 0
-          ? `, out of ${(rawTotal / 1048576).toFixed(1)} MB of transcript  (${Math.round(rawTotal / Math.max(chars, 1))}x smaller)`
-          : ''),
-    ],
-  ];
+      [
+        'conversation',
+        `${chars.toLocaleString('en-US')} chars` +
+          (rawTotal > 0
+            ? `, out of ${(rawTotal / 1048576).toFixed(1)} MB of transcript  (${Math.round(rawTotal / Math.max(chars, 1))}x smaller)`
+            : ''),
+      ],
+    );
+  }
+  if (hasFiles || rawFiles.unreadable.length) {
+    summary.push([
+      'files',
+      `${rawFiles.files.length} waiting to be read` +
+        (rawFiles.remaining > 0 ? `, ${rawFiles.remaining} after that` : '') +
+        (rawFiles.unreadable.length ? `, ${rawFiles.unreadable.length} not readable` : ''),
+    ]);
+  }
   if (standingText) {
     summary.push([
       'standing',
@@ -533,7 +575,18 @@ function stage(vault, d) {
       '',
       ...planBlock([
         ...(standingText ? [{ read: join(dir, 'standing.md') }] : []),
-        { read: join(dir, 'conversations.md') },
+        ...(included.length > 0 ? [{ read: join(dir, 'conversations.md') }] : []),
+        ...(hasFiles
+          ? [
+              {
+                read: join(dir, 'files.md'),
+                note:
+                  `${rawFiles.files.length} file${rawFiles.files.length === 1 ? '' : 's'} are ` +
+                  `waiting in the brain. That page lists them; OPEN EACH ONE — exposurie ` +
+                  `does not read documents, it finds them and hands them to you.`,
+              },
+            ]
+          : []),
         { read: join(vault, '.exposurie', 'wiki-prompt.md') },
         {
           write: 'Fold this batch into the brain, following the prompt above. Update ' +
@@ -564,6 +617,12 @@ function stage(vault, d) {
       empty: empty.length,
       redactions,
       standing: !!standingText,
+      files: {
+        staged: rawFiles.files.length,
+        remaining: rawFiles.remaining,
+        unreadable: rawFiles.unreadable.length,
+        excluded: rawFiles.excluded.length,
+      },
       exports: {
         found: web.exports,
         duplicates: web.duplicates,
@@ -624,7 +683,10 @@ function done(vault) {
     body: [
       ...block('FILED', [
         ['batch', batch.id],
-        ['sessions', `${batch.sessions} now marked as read`],
+        // Say what was actually in it. A batch of documents reporting
+        // "0 sessions now marked as read" describes a sync that did nothing.
+        ...(batch.sessions > 0 ? [['sessions', `${batch.sessions} now marked as read`]] : []),
+        ...(batch.rawFiles > 0 ? [['files', `${batch.rawFiles} now marked as read`]] : []),
         ['still waiting', String(next.unfiled ?? 0)],
       ]),
       '',

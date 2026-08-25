@@ -42,8 +42,9 @@ export function seamDefaults(version) {
     _readme:
       'This file is yours to edit. exposurie READS the paths in "categories" to ' +
       'find your pages — rename a folder on disk and change it here in the same ' +
-      'edit, or search stops seeing it. "excludeFiles" is read once file ' +
-      'ingestion ships; everything else here is live policy you own.',
+      'edit, or search stops seeing it. "excludeConversations" matches a working ' +
+      'directory or a chat title; "excludeFiles" matches anything you drop in ' +
+      'raw/. Everything here is live policy you own.',
     version,
     categories: {
       sources: 'wiki/sources',
