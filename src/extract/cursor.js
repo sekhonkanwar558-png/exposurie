@@ -63,14 +63,31 @@ const json = (v) => {
   }
 };
 
-/** `file:///c%3A/Users/x/thing` -> `c:/Users/x/thing`. */
+/**
+ * A `file://` URI back to a path, on both platforms this ships for.
+ *
+ *   Windows   file:///c%3A/Users/x/thing  ->  c:/Users/x/thing
+ *   macOS     file:///Users/x/thing       ->  /Users/x/thing
+ *
+ * The three slashes are not a typo and the difference between the two lines is
+ * the whole function. Stripping `file:///` is right on Windows, where a drive
+ * letter follows, and wrong everywhere else — it eats the leading slash and
+ * turns an absolute path into something that looks relative. Nothing crashes:
+ * the project name still comes out via `basename`, and the EXCLUSION GATE
+ * quietly stops matching, so a person who excluded `/Users/them/client-work`
+ * would find that folder in their brain with nothing reporting why.
+ */
 function fromFileUri(uri) {
   if (typeof uri !== 'string' || !uri.startsWith('file:///')) return null;
+  let path;
   try {
-    return decodeURIComponent(uri.slice('file:///'.length));
+    path = decodeURIComponent(uri.slice('file:///'.length));
   } catch {
     return null;
   }
+  if (!path) return null;
+  // A drive letter means Windows; anything else was rooted at `/`.
+  return /^[a-zA-Z]:/.test(path) ? path : `/${path}`;
 }
 
 /**

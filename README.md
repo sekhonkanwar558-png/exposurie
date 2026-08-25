@@ -141,6 +141,10 @@ have different lives on their disks.
 | **Cursor user** | its SQLite chat store | their ChatGPT export | claude.ai |
 | **Neither** | nothing local | their claude.ai export | — |
 
+**v1 reads three coding agents — Claude Code, Codex and Cursor — on Windows and
+macOS.** Claude Code and Codex use the same paths on both. Cursor does not, and
+neither does Obsidian, so those are path tables rather than assumptions.
+
 The rule underneath: **a step that a person can never complete is worse than no
 step at all.** Asking a Codex user on a Mac for a claude.ai export produces a
 request that cannot resolve, so it reprints at the top of every command forever
@@ -300,6 +304,26 @@ Two things it deliberately does not do:
   that can never reach zero is a report nobody reads. The tool prints the exact
   line that retires one, and always prints how many are retired.
 
+## What is verified on which platform
+
+Developed on Windows, shipped for both. Being explicit about the difference,
+because "no sessions found" on a machine nobody can debug is the worst possible
+first run:
+
+| | Windows | macOS |
+|---|---|---|
+| Claude Code | run against 162 real sessions | same path, exercised on a macOS layout |
+| Codex | run against real rollouts | same path, exercised on a macOS layout |
+| Cursor | run against the real SQLite store | **path table only** |
+| claude.ai export | run against a real export | platform-independent |
+| Obsidian detection | real install | layout exercised |
+
+A macOS home directory is a directory shape, and Windows will create
+`Library/Application Support/Cursor/User` perfectly well — so the macOS
+*branches* of every path this product resolves are covered by tests that run
+here. What those tests cannot answer is whether Cursor genuinely writes to that
+folder on a Mac. That one is unverified, and saying so is the point.
+
 ## Privacy
 
 Your brain is **local files on your disk.** Nothing is uploaded, there is no
@@ -323,6 +347,9 @@ Some of these enforce rules rather than check behaviour, and each was verified
 by breaking the thing it guards and watching it fail:
 
 - every client that claims to be readable has a reader behind it
+- the macOS branch of every path table resolves, exercised from Windows
+- a macOS project path survives conversion out of Cursor with its leading slash
+- the shipped executable has a unix shebang
 - nothing in the shipped source can read stdin
 - no personal data, private path or private tooling in any file in the repo
 - `scaffold` cannot overwrite a file you have edited
