@@ -166,7 +166,10 @@ export function describe(s) {
   const human = s.turns.filter((t) => t.role === 'user').length;
   return {
     id: s.id,
-    project: s.cwd ? basename(s.cwd) : 'unknown',
+    // A web conversation has no working directory and never will — its title is
+    // its identity. Preferring an explicit `project` keeps both kinds of session
+    // in one manifest without a second renderer.
+    project: s.project || (s.cwd ? basename(s.cwd) : 'unknown'),
     surface: s.surface,
     startedAt: s.startedAt,
     endedAt: s.endedAt,

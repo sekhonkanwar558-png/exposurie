@@ -45,15 +45,22 @@ const matchesAny = (value, patterns) => {
 /**
  * Should this session be skipped entirely?
  *
- * Matched against the working directory the session ran in, which is the only
- * durable identity a conversation has — a transcript filename is a uuid, and a
- * project folder is what a person recognises.
+ * Matched against the working directory the session ran in, which is the
+ * durable identity a local conversation has — a transcript filename is a uuid,
+ * and a project folder is what a person recognises.
+ *
+ * A claude.ai conversation has no working directory and never will, so its
+ * TITLE is matched instead. Without this there is no handle at all: a person
+ * with a chat they do not want in their brain — a medical question, a job
+ * search, anything — could exclude it on their machine and not on the web, and
+ * the list would look like it was working.
  */
 export function conversationExcluded(session, seam) {
   const pats = seam?.excludeConversations || [];
   if (pats.length === 0) return null;
-  const hit = matchesAny(session.cwd || '', pats);
-  return hit ? (session.cwd || 'unknown') : null;
+  const identity = session.cwd || session.title || '';
+  if (!identity) return null;
+  return matchesAny(identity, pats) ? identity : null;
 }
 
 /**

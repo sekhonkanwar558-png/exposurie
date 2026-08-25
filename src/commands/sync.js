@@ -45,7 +45,9 @@ import { join, basename } from 'node:path';
 import { detect, brokenConfig } from '../context.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR } from '../exit-codes.js';
-import { readTranscript, describe } from '../extract/transcript.js';
+import { describe } from '../extract/transcript.js';
+import { readExports, renderStanding } from '../extract/webchat.js';
+import { readChatGptExports } from '../extract/chatgpt.js';
 import { redact } from '../extract/redact.js';
 import { conversationExcluded } from '../extract/exclude.js';
 import { curate, report } from '../curate.js';
@@ -201,12 +203,72 @@ function stage(vault, d) {
       }
       const from = seen[f]?.bytes ?? 0;
       if (size <= from) continue;
-      candidates.push({ path: f, client: c.id, size, from, mtime: statSync(f).mtimeMs });
+      candidates.push({
+        kind: 'transcript',
+        path: f,
+        client: c.id,
+        // The reader comes from the client table rather than being assumed, so
+        // a rollout is never handed to a parser written for another format.
+        read: c.read,
+        size,
+        from,
+        sortAt: statSync(f).mtimeMs,
+      });
     }
   }
-  // Newest first: recent context is what makes older material legible, and a
-  // sync that stops early then leaves a useful brain rather than an ancient one.
-  candidates.sort((a, b) => b.mtime - a.mtime);
+
+  // The claude.ai export, which is the other half of a person — and for most
+  // people the larger half. Measured on one real account: 264 KB of their own
+  // words on the web against 166 KB across every local session. Somebody who
+  // has never opened a terminal has the first number and a zero.
+  //
+  // It is read here rather than by a command of its own because it is the same
+  // job: material in, conversation out. A second command would also be a second
+  // thing to remember, and forgetting is what this product is against.
+  //
+  // ONE HONEST DIFFERENCE from a transcript, and it is a property of zips
+  // rather than a decision: a conversation's title cannot be known without
+  // decompressing the single file that holds every conversation, so the
+  // exclusion gate cannot run before the read the way it does for transcripts.
+  // It still runs before anything is staged, redacted, or written to disk.
+  const claude = readExports(d.exports.map((e) => e.path));
+  const gpt = readChatGptExports((d.chatgptExports || []).map((e) => e.path));
+  // One list. Which service a conversation came from decides nothing after this
+  // point — it is all somebody talking, and the brain does not have a Claude
+  // half and an OpenAI half.
+  const web = {
+    sessions: [...claude.sessions, ...gpt.sessions],
+    standing: claude.standing || gpt.standing,
+    exports: claude.exports + gpt.exports,
+    failed: [
+      ...claude.failed,
+      ...gpt.failed,
+      // Archives that never even opened, so no reader ever saw them.
+      ...(d.brokenExports || []).map((e) => ({ path: e.path, error: e.error })),
+    ],
+    duplicates: claude.duplicates + gpt.duplicates,
+    skippedEmpty: claude.skippedEmpty + gpt.skippedEmpty,
+    emptyBodies: claude.emptyBodies,
+  };
+  for (const s of web.sessions) {
+    const prior = seen[s.path];
+    // A web chat has no byte offset — an export is a snapshot, not an
+    // append-only file — so `updated_at` is the resumption key. Unchanged since
+    // the last read means skip it whole rather than stage it twice.
+    if (prior && prior.updatedAt && prior.updatedAt === s.updatedAt) continue;
+    candidates.push({
+      kind: 'webchat',
+      path: s.path,
+      client: 'claude.ai',
+      session: s,
+      sortAt: Date.parse(s.updatedAt || s.endedAt || '') || 0,
+    });
+  }
+
+  // Newest first, across both sources: recent context is what makes older
+  // material legible, and a sync that stops early then leaves a useful brain
+  // rather than an ancient one.
+  candidates.sort((a, b) => b.sortAt - a.sortAt);
 
   // The gate runs over everything first, not inside the batching loop. It is a
   // policy about what may be opened at all, so it cannot depend on where a
@@ -216,7 +278,11 @@ function stage(vault, d) {
   const excluded = [];
   const eligible = [];
   for (const cand of candidates) {
-    const hit = conversationExcluded({ cwd: peekCwd(cand.path) }, seam);
+    const identity =
+      cand.kind === 'webchat'
+        ? { cwd: null, title: cand.session.project }
+        : { cwd: peekCwd(cand.path) };
+    const hit = conversationExcluded(identity, seam);
     if (hit) excluded.push({ path: cand.path, why: hit });
     else eligible.push(cand);
   }
@@ -226,18 +292,31 @@ function stage(vault, d) {
   let redactions = {};
 
   for (const cand of eligible) {
-    const s = readTranscript(cand.path, cand.from);
+    const s = cand.kind === 'webchat' ? cand.session : cand.read(cand.path, cand.from);
     if (!s || s.turns.length === 0) {
-      // Nothing said in it. Real: 16 of 127 sessions on a measured corpus.
-      empty.push({ path: cand.path, readTo: cand.size });
+      // Nothing said in it. Real: 16 of 127 sessions on a measured corpus, and
+      // 6 of 93 conversations on a measured export.
+      empty.push({
+        path: cand.path,
+        readTo: cand.kind === 'webchat' ? (s ? s.readTo : 0) : cand.size,
+        updatedAt: cand.kind === 'webchat' ? cand.session.updatedAt : undefined,
+      });
       continue;
     }
 
     // Whole sessions only — half a conversation is worse than none, because the
-    // half that explains why is usually the half that gets cut. So the budget
-    // stops us BEFORE a session that would blow past it, and the first session
-    // always goes in, or a brain with one enormous session never progresses.
-    if (included.length > 0 && chars + s.chars > budget) break;
+    // half that explains why is usually the half that gets cut. So a session
+    // that would blow the budget is left for a batch of its own, and the first
+    // session always goes in, or a brain with one enormous session never
+    // progresses.
+    //
+    // It SKIPS rather than stops, and that difference is worth the line: with a
+    // stop, one short conversation at the top of the list ends the batch, and a
+    // person with a year of history gets a first run holding a single 2,900
+    // character chat. That happened on the first real export this was pointed
+    // at. Order is still newest-first; what changes is that a big session
+    // defers itself instead of ending everyone else's turn.
+    if (included.length > 0 && chars + s.chars > budget) continue;
 
     const r = redact(s.turns.map((t) => t.text).join('\n'));
     if (r.count) {
@@ -254,11 +333,33 @@ function stage(vault, d) {
       ? (excluded.length ? `Nothing new outside your exclude list, which held back ${excluded.length} session${excluded.length === 1 ? '' : 's'}.` : 'Nothing on this machine has changed since the last sync.')
       : `${eligible.length} transcript${eligible.length === 1 ? '' : 's'} changed, but none held any conversation — ` +
         'they were tool work with nothing said.';
+
+    // An export that would not open has to be reported HERE too, and this is
+    // the path where it matters most: when the export is the only material a
+    // person has, a failure to read it lands on "nothing has changed since the
+    // last sync" — which is not merely unhelpful, it is false. The bug was
+    // real, and it is the house failure class exactly: silence that reads as a
+    // clean result.
+    const trouble = [];
+    for (const f of web.failed) {
+      trouble.push(['EXPORT UNREADABLE', `${basename(f.path)} — ${f.error}`]);
+    }
+    if (web.emptyBodies) {
+      trouble.push([
+        'EXPORT INCOMPLETE',
+        `${web.emptyBodies.count} chats listed with no text in them` +
+          (web.emptyBodies.from
+            ? ` (${web.emptyBodies.from.slice(0, 10)} to ${web.emptyBodies.to.slice(0, 10)})`
+            : ''),
+      ]);
+    }
     // Sessions with nothing in them are still finished with, or they are
     // re-examined forever.
     if (empty.length) {
       const next = { ...state, files: { ...seen } };
-      for (const e of empty) next.files[e.path] = { bytes: e.readTo, at: iso() };
+      for (const e of empty) {
+        next.files[e.path] = { bytes: e.readTo, updatedAt: e.updatedAt, at: iso() };
+      }
       next.lastSyncUtc = iso();
       next.unfiled = 0;
       writeState(vault, next);
@@ -271,9 +372,21 @@ function stage(vault, d) {
       code: OK,
       state: { ...vaultState(vault, 'sync'), unfiled: 0 },
       body: [
-        ...block('NOTHING NEW', [['result', 'nothing to stage']]),
+        ...block('NOTHING NEW', [['result', 'nothing to stage'], ...trouble]),
         '',
         ...wrap(why, 74, '  '),
+        ...(web.failed.length
+          ? [
+              '',
+              ...wrap(
+                'That export could not be opened, so nothing was taken from it. This is ' +
+                  'usually a download that stopped early — ask them to download it again, ' +
+                  'or to request a fresh export. Nothing already in the brain is affected.',
+                74,
+                '  ',
+              ),
+            ]
+          : []),
         '',
         ...c.body,
       ],
@@ -282,6 +395,10 @@ function stage(vault, d) {
         candidates: candidates.length,
         excluded: excluded.length,
         empty: empty.length,
+        exports: {
+          found: web.exports,
+          failed: web.failed.map((f) => ({ path: f.path, error: f.error })),
+        },
         curate: c.json,
       },
     };
@@ -295,18 +412,30 @@ function stage(vault, d) {
   const rawTotal = included.reduce((n, s) => n + s.rawBytes, 0);
   const remaining = eligible.length - included.length - empty.length;
 
+  // Standing context goes in front of the batch, not into the queue behind it.
+  // It is what claude.ai already knows about the person plus the instructions
+  // they wrote for their own projects — small, already distilled, and the thing
+  // that makes a year of conversation legible on the first read rather than the
+  // fifth. Written on every batch, because a batch is read on its own.
+  const standingText = renderStanding(web.standing);
+  if (standingText) writeFileSync(join(dir, 'standing.md'), standingText, 'utf8');
+
   writeFileSync(join(dir, 'conversations.md'), renderConversations(id, included), 'utf8');
   writeFileSync(
     join(dir, 'MANIFEST.md'),
-    renderManifest(id, rows, { excluded, empty, remaining, chars, rawTotal, redactions }),
+    renderManifest(id, rows, { excluded, empty, remaining, chars, rawTotal, redactions, web }),
     'utf8',
   );
 
   // Recorded, not applied: these offsets become the cutoff only once the pages
   // exist. An abandoned sync must re-stage the same material, not skip it.
   const pending = { id, stagedAt: iso(), files: {}, sessions: included.length };
-  for (const s of included) pending.files[s.path] = { bytes: s.readTo, at: iso() };
-  for (const e of empty) pending.files[e.path] = { bytes: e.readTo, at: iso() };
+  for (const s of included) {
+    pending.files[s.path] = { bytes: s.readTo, updatedAt: s.updatedAt, at: iso() };
+  }
+  for (const e of empty) {
+    pending.files[e.path] = { bytes: e.readTo, updatedAt: e.updatedAt, at: iso() };
+  }
   writeState(vault, {
     ...state,
     files: seen,
@@ -314,19 +443,62 @@ function stage(vault, d) {
     unfiled: remaining,
   });
 
+  const fromWeb = included.filter((s) => s.surface === 'claude.ai' || s.surface === 'chatgpt').length;
+  const fromMachine = included.length - fromWeb;
+
   const summary = [
     ['batch', id],
     ['sessions', `${included.length} staged${remaining > 0 ? `, ${remaining} still waiting` : ''}`],
+    // Where a batch came from is not decoration: someone who has only ever used
+    // the web should see their own life in this line, not a zero.
+    [
+      'from',
+      // Named, not lumped. "3 from the web" tells somebody nothing about their
+      // own setup; "3 from claude.ai" is a fact about them.
+      [
+        `${fromMachine} on this machine`,
+        ...['claude.ai', 'chatgpt']
+          .map((svc) => {
+            const n = included.filter((s) => s.surface === svc).length;
+            return n ? `${n} from ${svc}` : null;
+          })
+          .filter(Boolean),
+      ].join(', '),
+    ],
     [
       'conversation',
-      `${chars.toLocaleString('en-US')} chars, out of ${(rawTotal / 1048576).toFixed(1)} MB of transcript` +
-        (rawTotal > 0 ? `  (${Math.round(rawTotal / Math.max(chars, 1))}x smaller)` : ''),
+      `${chars.toLocaleString('en-US')} chars` +
+        (rawTotal > 0
+          ? `, out of ${(rawTotal / 1048576).toFixed(1)} MB of transcript  (${Math.round(rawTotal / Math.max(chars, 1))}x smaller)`
+          : ''),
     ],
   ];
+  if (standingText) {
+    summary.push([
+      'standing',
+      `what claude.ai already knows${web.standing?.projects?.length ? `, plus ${web.standing.projects.length} project brief${web.standing.projects.length === 1 ? '' : 's'}` : ''}`,
+    ]);
+  }
   if (excluded.length) summary.push(['excluded', `${excluded.length} by your exclude list`]);
   if (empty.length) summary.push(['no conversation', `${empty.length} skipped`]);
+  if (web.duplicates) {
+    summary.push(['already had', `${web.duplicates} chats repeated across your exports`]);
+  }
+  if (web.emptyBodies) {
+    summary.push([
+      'EXPORT INCOMPLETE',
+      `${web.emptyBodies.count} chats listed with no text in them` +
+        (web.emptyBodies.from ? ` (${web.emptyBodies.from.slice(0, 10)} to ${web.emptyBodies.to.slice(0, 10)})` : ''),
+    ]);
+  }
   if (Object.keys(redactions).length) {
     summary.push(['redacted', Object.entries(redactions).map(([k, n]) => `${n} ${k}`).join(', ')]);
+  }
+  // An export that would not open is reported here rather than swallowed. A
+  // half-downloaded zip is a normal thing to happen to a person, and it is
+  // indistinguishable from "you have no web chats" unless we say so.
+  for (const f of web.failed) {
+    summary.push(['EXPORT UNREADABLE', `${basename(f.path)} — ${f.error}`]);
   }
 
   return {
@@ -336,6 +508,7 @@ function stage(vault, d) {
       ...block('STAGED', summary),
       '',
       ...planBlock([
+        ...(standingText ? [{ read: join(dir, 'standing.md') }] : []),
         { read: join(dir, 'conversations.md') },
         { read: join(vault, '.exposurie', 'wiki-prompt.md') },
         {
@@ -358,12 +531,20 @@ function stage(vault, d) {
       batch: id,
       dir,
       staged: included.length,
+      fromMachine,
+      fromWeb,
       remaining,
       chars,
       rawBytes: rawTotal,
       excluded: excluded.length,
       empty: empty.length,
       redactions,
+      standing: !!standingText,
+      exports: {
+        found: web.exports,
+        duplicates: web.duplicates,
+        failed: web.failed.map((f) => ({ path: f.path, error: f.error })),
+      },
     },
   };
 }
@@ -510,10 +691,60 @@ function renderManifest(id, rows, extra) {
         `${r.humanTurns} + ${r.turns - r.humanTurns} | ${r.chars.toLocaleString('en-US')} |`,
     ),
     '',
-    `**${extra.chars.toLocaleString('en-US')} characters of conversation**, read out of ` +
-      `${(extra.rawTotal / 1048576).toFixed(1)} MB of transcript.`,
+    `**${extra.chars.toLocaleString('en-US')} characters of conversation**` +
+      (extra.rawTotal > 0
+        ? `, read out of ${(extra.rawTotal / 1048576).toFixed(1)} MB of transcript.`
+        : '.'),
     '',
   ];
+  const web = extra.web || { exports: 0, failed: [], duplicates: 0 };
+  if (web.exports > 0) {
+    out.push('## From claude.ai', '');
+    out.push(
+      `${web.exports} export${web.exports === 1 ? '' : 's'} read. Web conversations carry no ` +
+        'working directory, so they are identified by their title. Attachments were ' +
+        'not opened: a pasted document is a file, and what was said about it is the ' +
+        'part that carries motive.',
+      '',
+    );
+    if (web.duplicates) {
+      out.push(
+        `${web.duplicates} conversation${web.duplicates === 1 ? '' : 's'} appeared in more than ` +
+          'one export and were taken once, from the newest.',
+        '',
+      );
+    }
+  }
+  if (web.emptyBodies) {
+    out.push('## Your export is missing text', '');
+    out.push(
+      `${web.emptyBodies.count} conversation${web.emptyBodies.count === 1 ? '' : 's'} in the ` +
+        'export arrived with messages but no words in them — no title, no summary, ' +
+        'nothing said' +
+        (web.emptyBodies.from
+          ? `, covering ${web.emptyBodies.from.slice(0, 10)} to ${web.emptyBodies.to.slice(0, 10)}.`
+          : '.'),
+      '',
+      'This is almost always a **split export**. Anthropic breaks a large account ' +
+        'into numbered zips — `batch-0000`, `batch-0001` and so on — and the email ' +
+        'carries a link for each. If only the first was downloaded, the rest of the ' +
+        'history is listed in it but lives in the others.',
+      '',
+      '**Worth telling them, because they can fix it:** check the export email for ' +
+        'more download links, or request a fresh export. Drop any further zips in ' +
+        'Downloads and run sync again — nothing needs redoing, and nothing already ' +
+        'filed is lost.',
+      '',
+      'These conversations were NOT marked as read. They will be picked up the ' +
+        'moment an export arrives with their text in it.',
+      '',
+    );
+  }
+  if (web.failed?.length) {
+    out.push('## Exports that would not open', '');
+    for (const f of web.failed) out.push(`- \`${basename(f.path)}\` — ${f.error}`);
+    out.push('', 'Nothing was taken from these. The rest of the batch is unaffected.', '');
+  }
   if (extra.excluded.length) {
     out.push('## Excluded by your list', '');
     out.push('Only the head of each was read, far enough to find which folder it', '');

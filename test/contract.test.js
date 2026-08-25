@@ -10,7 +10,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { stateLine, planBlock, pendingBlock, render, block, wrap } from '../src/output.js';
-import { STEPS, unresolved } from '../src/pending.js';
+import { STEPS, lines, unresolved } from '../src/pending.js';
 import { OK, HUMAN, footer } from '../src/exit-codes.js';
 import { SYNC, exists } from '../src/commands/names.js';
 import { init } from '../src/commands/init.js';
@@ -105,7 +105,15 @@ test('every human step ships exact words, not a topic', () => {
     for (const f of ['title', 'why', 'ask', 'doneWhen']) {
       assert.ok(s[f]?.length > 10, `${id}.${f} is missing or too thin to relay`);
     }
-    assert.ok(Array.isArray(s.verbatim) && s.verbatim.length >= 2, `${id}.verbatim must be real steps`);
+    // `verbatim` may be a function now, because a step that names the user's
+    // own brain folder cannot be a fixed string. Resolve it the way the
+    // renderer does and hold the same bar on what comes out.
+    const said = lines(s, { vault: '/somewhere/brain' });
+    assert.ok(Array.isArray(said) && said.length >= 2, `${id}.verbatim must be real steps`);
+    assert.ok(
+      said.every((l) => typeof l === 'string'),
+      `${id}.verbatim must be lines an agent can relay`,
+    );
     assert.equal(typeof s.resolved, 'function', `${id} must be detectable, not self-reported`);
   }
 });

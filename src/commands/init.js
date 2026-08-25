@@ -10,6 +10,52 @@ import { unresolved, record } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
 import { DEFAULT_VAULT, expandPath, vaultState } from '../vault.js';
+import { openZip, ZipError } from '../extract/zip.js';
+import { CONVERSATIONS, MEMORIES } from '../extract/webchat.js';
+
+/**
+ * How much is actually in the export, without folding any of it in.
+ *
+ * Only `conversations.json` is inflated, and only to count the list — the whole
+ * archive is never expanded. An export that will not open is reported by name
+ * here rather than at sync time, because this is where a person is still
+ * standing next to the download and can just request it again.
+ */
+function countExport(exports) {
+  const newest = [...exports].sort((a, b) => b.size - a.size)[0];
+  let zip;
+  try {
+    zip = openZip(newest.path);
+    const list = zip.has(CONVERSATIONS) ? JSON.parse(zip.read(CONVERSATIONS)) : [];
+    const all = Array.isArray(list) ? list : [];
+    // A conversation the export listed but did not fill in. Counted here so the
+    // very first command can say a split export is short, which is when the
+    // person is still standing next to the download email.
+    //
+    // The count beside it is of conversations that will ACTUALLY be read, not
+    // of rows in the file. Those are different numbers — an account collects
+    // chats that were opened and never used — and printing the larger one here
+    // would have this command promise 27 where sync then reports 21.
+    const hasWords = (c) =>
+      (c.chat_messages || []).some((m) => (m.content || []).length || String(m.text || '').trim());
+    const hollow = all.filter((c) => (c.chat_messages || []).length > 0 && !hasWords(c)).length;
+    return {
+      conversations: all.filter(hasWords).length,
+      hollow,
+      memory: zip.has(MEMORIES),
+      error: null,
+    };
+  } catch (e) {
+    return {
+      conversations: 0,
+      hollow: 0,
+      memory: false,
+      error: e instanceof ZipError ? e.message : String(e.message || e),
+    };
+  } finally {
+    if (zip) zip.close();
+  }
+}
 
 export function init({ at } = {}) {
   const d = detect();
@@ -36,16 +82,45 @@ export function init({ at } = {}) {
     ]);
   }
 
-  rows.push([
-    'web chats',
-    d.exports.length
-      ? `${d.exports.length} export${d.exports.length === 1 ? '' : 's'} found   (${tilde(d.exports[0].path)})`
-      : 'not found',
-  ]);
-
   // Detection decides what is still owed, so a step cannot be falsely closed.
-  const ctx = { exports: d.exports, obsidianInstalled: false };
-  const open = unresolved(ctx, ['claude-web-export']);
+  const ctx = { exports: d.exports, obsidianInstalled: d.obsidianInstalled, clients: d.clients, chatgptExports: d.chatgptExports };
+  const open = unresolved(ctx, ['claude-web-export', 'chatgpt-web-export', 'obsidian']);
+
+  // Counted, not just detected. "1 export found" and "93 conversations, ready"
+  // are the same fact, and only one of them tells a person their own life is
+  // about to be read. This is the one command that can afford the read: it is
+  // typed once, and every other command gets the count from sync's own pass.
+  const web = d.exports.length ? countExport(d.exports) : null;
+  const wantsClaude = open.some((p) => p.id === 'claude-web-export');
+  const wantsGpt = open.some((p) => p.id === 'chatgpt-web-export');
+  rows.push([
+    'claude.ai chats',
+    web
+      ? web.error
+        ? `export found but UNREADABLE — ${web.error}`
+        : `${web.conversations} conversation${web.conversations === 1 ? '' : 's'}` +
+          `${web.memory ? ', plus what claude.ai remembers about you' : ''}   (${tilde(d.exports[0].path)})`
+      : wantsClaude
+        ? 'no export yet — the step below gets it'
+        : 'none, and not asked for — nothing here suggests a Claude account',
+  ]);
+  // Only shown to somebody it could apply to. A Claude Code user does not need
+  // a row telling them they have no ChatGPT export.
+  if (d.chatgptExports.length || wantsGpt) {
+    rows.push([
+      'chatgpt chats',
+      d.chatgptExports.length
+        ? `export found   (${tilde(d.chatgptExports[0].path)})`
+        : 'no export yet — the step below gets it',
+    ]);
+  }
+  if (web && !web.error && web.hollow > 0) {
+    rows.push([
+      '',
+      `${web.hollow} more listed with no text — the export is split across ` +
+        `numbered zips and only one is here`,
+    ]);
+  }
 
   const steps = [];
   // Never offer scaffold while the pointer is broken: it is the one command
@@ -68,13 +143,17 @@ export function init({ at } = {}) {
         `overwritten. Writes nothing else and reads no transcripts.`,
     });
   }
-  if (d.vault && d.sessions > 0) {
+  // The export counts as material. Gating this on local sessions alone was the
+  // bug that mattered most: someone who has only ever used claude.ai has 0
+  // sessions and a full life in that zip, and the tool told them there was
+  // nothing to do.
+  if (d.vault && (d.sessions > 0 || (web && !web.error && web.conversations > 0))) {
     steps.push({
       run: 'exposurie sync',
       note:
-        `Stages a batch of conversation out of those sessions, newest first, and ` +
-        `hands it back for you to fold into pages. It is resumable, so this can be ` +
-        `run as many times as it takes.`,
+        `Stages a batch of conversation — from this machine and from your claude.ai ` +
+        `export together, newest first — and hands it back for you to fold into ` +
+        `pages. It is resumable, so this can be run as many times as it takes.`,
     });
   }
   for (const p of open) {
@@ -99,10 +178,12 @@ export function init({ at } = {}) {
     '',
     'NOT IN THIS VERSION',
     ...wrap(
-      'Only conversation is read — the sessions on this machine. Files are not: ' +
-        'notes, documents and PDFs dropped into the brain are stored and linked, ' +
-        'never ingested, and a claude.ai export is detected and asked for but is ' +
-        'not yet folded in either. Do not invent a command for that.',
+      'Only conversation is read — sessions on this machine and claude.ai chats ' +
+        'from an export. Files are not: notes, documents and PDFs dropped into the ' +
+        'brain are stored and linked, never ingested, and the documents attached to ' +
+        'a claude.ai Project are listed but not opened. ChatGPT history is not read ' +
+        'at all — there is no reader for its export yet. Do not invent a command ' +
+        'for any of that.',
       74,
       '  ',
     ),
@@ -111,7 +192,7 @@ export function init({ at } = {}) {
   return {
     code: open.length ? HUMAN : OK,
     state: vaultState(d.vault, 'init'),
-    pending: open,
+    pending: open.map((s) => ({ ...s, ctx: { vault: d.vault } })),
     body: [
       ...block('STATE', rows),
       ...(steps.length ? ['', ...planBlock(steps)] : []),
@@ -123,6 +204,10 @@ export function init({ at } = {}) {
       sessions: d.sessions,
       clients: d.clients.map((c) => ({ id: c.id, present: c.present, count: c.count, readable: c.readable })),
       exports: d.exports.map((e) => e.path),
+      webChats: web ? web.conversations : 0,
+      webChatsWithoutText: web ? web.hollow : 0,
+      webExportError: web ? web.error : null,
+      obsidian: d.obsidianInstalled,
       pending: open.map((p) => p.id),
     },
   };

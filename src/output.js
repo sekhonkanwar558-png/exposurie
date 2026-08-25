@@ -154,9 +154,10 @@ export function pendingBlock(pending) {
       out.push(`${INDENT}  ASK YOUR USER, in your own words:`);
       out.push(...wrap(`"${p.ask}"`, 68, `${INDENT}      `));
     }
-    if (p.verbatim?.length) {
+    const said = typeof p.verbatim === 'function' ? p.verbatim(p.ctx || {}) : p.verbatim;
+    if (said?.length) {
       out.push(`${INDENT}  RELAY THESE EXACTLY — do not paraphrase, do not summarise:`);
-      for (const line of p.verbatim) out.push(`${INDENT}      ${line}`);
+      for (const line of said) out.push(`${INDENT}      ${line}`);
     }
     if (p.doneWhen) out.push(`${INDENT}  DONE WHEN: ${p.doneWhen}`);
     out.push(`${INDENT}  This does NOT block anything. Keep working.`);

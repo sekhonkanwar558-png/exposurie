@@ -20,12 +20,14 @@ session, so you can open a fresh one every time and lose nothing.
   of carrying everything in every session.
 
 > **Status: early.** The chain works end to end — `init`, `scaffold`, `sync` and
-> `read`. You can create a brain, fill it from your own sessions in resumable
-> batches, and open any page or any section of one in a single command. Curation
-> runs inside every sync. Files are not ingested yet: only conversation is read,
-> and a claude.ai export is asked for but not yet folded in. Nothing is published
-> to npm. This repo is public so the design can be read and argued with while it
-> is still cheap to change.
+> `read`. You can create a brain, fill it from Claude Code, Codex and your
+> claude.ai chat export in resumable batches, and open any page or any section of
+> one in a single command. Curation runs inside every sync. Files are still not
+> ingested: only conversation is read, so notes, documents and PDFs are stored
+> and linked rather than folded in. The ChatGPT export has a reader that has not
+> yet met a real export — see below. Nothing is published to npm. This repo is
+> public so the design can be read and argued with while it is still cheap to
+> change.
 
 ## Install
 
@@ -127,14 +129,92 @@ so in that file, and search follows you. Without that seam the failure is
 silent: renaming a folder would make half the brain invisible with nothing
 reporting it.
 
+## It works out your setup and talks to that
+
+Two people run the same command and get different instructions, because they
+have different lives on their disks.
+
+|  | it finds | it asks them for | it never mentions |
+|---|---|---|---|
+| **Claude Code user** | `~/.claude` transcripts | their claude.ai export | ChatGPT |
+| **Codex user** | `~/.codex` rollouts | their ChatGPT export | claude.ai |
+| **Neither** | nothing local | their claude.ai export | — |
+
+The rule underneath: **a step that a person can never complete is worse than no
+step at all.** Asking a Codex user on a Mac for a claude.ai export produces a
+request that cannot resolve, so it reprints at the top of every command forever
+— and teaches them the tool does not notice what they do. So every human step
+declares not only how it is *detected as done* but whether it *applies to this
+person at all*.
+
+The same rule runs down to the small things. Install instructions print the one
+package manager for the OS you are on, not three with a note to pick. The step
+that gets you into Obsidian names the exact folder your brain is in, because the
+tool knows it and you should not have to go looking.
+
+Exports are identified by **what is inside the zip**, never by its name —
+Anthropic's is reliably `data-*.zip` and OpenAI's is reliably nothing, so a
+filename rule would miss every ChatGPT export. The trade is that a corrupt
+archive matches nothing and would vanish; so a zip that *looks* like an export
+and will not open is reported as broken rather than silently skipped.
+
+## Reading a claude.ai export, and what is actually in one
+
+A chat export is not a side channel. Measured on one real account: **264 KB of
+that person's own typed words on the web, against 166 KB across every Claude
+Code session on their machine.** For anyone who has not spent a year in a
+terminal, it is not 1.6x — it is all of it.
+
+Four things come out of one zip, and only the first is chat:
+
+- `conversations.json` — the chats.
+- `memories.json` — what claude.ai has already worked out about you. Prose,
+  already distilled, the highest signal per byte in the archive.
+- `projects/*.json` — the instructions you wrote for your own projects.
+- `design_chats/*.json` — the same shape as a conversation, under another name.
+
+The last three are **standing context**: small, about you rather than about a
+moment, and read *before* the batch rather than queued behind a year of history.
+Reading only `conversations.json` would leave the two most concentrated files in
+the archive on the floor.
+
+Zip reading is ours, in about 200 lines against `node:zlib`, because one
+container is not worth spending the zero-dependency property on. It opens a
+single entry rather than the archive, so a 16 MB `conversations.json` is the
+only thing ever decompressed.
+
+**The finding that came out of pointing it at a real export:** 66 of 93
+conversations arrived with messages and not one word of text in them — no title,
+no summary, nothing. The file was named `batch-0000`. Anthropic splits a large
+account across numbered zips and only the first had been downloaded. Nothing
+about that is an error, which is the danger: the conversations are present, the
+count looks right, and a reader treating them as "nothing said" would mark four
+months of someone's life as read and never look again. They are reported and
+left unread instead, so a fuller export picks them up.
+
+**ChatGPT is different, and the README should say so.** Every other reader here
+was written against a real file. That one was not — there was no ChatGPT export
+on the machine it was built on. So its safety is not confidence in the parse: an
+archive that holds conversations and yields no words from any of them is
+reported as **a bug in exposurie**, by name, rather than as an empty account. If
+the shape is wrong, the first person to run it finds out, instead of getting a
+brain that quietly contains nobody.
+
 ## What sync actually reads
 
 A transcript is mostly not conversation. Measured across a real 128 MB corpus of
-127 sessions: tool results, tool calls, attachments, file snapshots and thinking
-are about 99% of the bytes. What a person and their agent actually **said** to
+127 Claude Code sessions: tool results, tool calls, attachments, file snapshots
+and thinking are about 99% of the bytes. What a person and their agent actually **said** to
 each other is around 1%. Dropping the rest is an **84× reduction that costs
 nothing**, because none of it carries motive — and motive is the whole reason a
 brain is worth having.
+
+**The same doctrine, twice over.** Codex writes a completely different format
+and had been listed as readable with no reader of its own: the Claude Code
+parser was handed its rollouts, returned zero turns from every one, and the sync
+marked them read. The session count was right the whole time. The reader now
+lives *in* the client table, so "readable" and "there is a function that reads
+it" are one statement — and a test holds them together.
 
 The filter that matters most is not the obvious one. Text arrives wearing a
 `user` role that no person typed — injected context, environment blocks, hook
@@ -217,6 +297,7 @@ Zero runtime dependencies. Node 20+.
 Some of these enforce rules rather than check behaviour, and each was verified
 by breaking the thing it guards and watching it fail:
 
+- every client that claims to be readable has a reader behind it
 - nothing in the shipped source can read stdin
 - no personal data, private path or private tooling in any file in the repo
 - `scaffold` cannot overwrite a file you have edited

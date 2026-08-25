@@ -225,7 +225,15 @@ export function scaffold({ at } = {}) {
   // a user's agent sitting in a code repo has no idea a brain exists.
   const reach = reachAll();
 
-  const open = unresolved({ exports: d.exports, obsidianInstalled: false }, ['claude-web-export']);
+  const open = unresolved(
+    {
+      exports: d.exports,
+      obsidianInstalled: d.obsidianInstalled,
+      clients: d.clients,
+      chatgptExports: d.chatgptExports,
+    },
+    ['claude-web-export', 'chatgpt-web-export', 'obsidian'],
+  );
   // Now that a brain exists, an open step is mirrored to disk as well as
   // printed. Auto mode blows past a terminal; a file is still there tomorrow.
   for (const p of open) record(target, p);
@@ -289,7 +297,7 @@ export function scaffold({ at } = {}) {
   return {
     code: open.length ? HUMAN : OK,
     state: vaultState(target, 'scaffold'),
-    pending: open,
+    pending: open.map((s) => ({ ...s, ctx: { vault: target } })),
     body,
     json: {
       brain: target,

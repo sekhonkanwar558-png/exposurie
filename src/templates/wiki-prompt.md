@@ -58,10 +58,14 @@ the first batch gives, then **rewrite it once the graph exists.** It should
 carry who they are, what they are building, what they care about, what they
 abandoned and why, and how they think — not a CV.
 
-The test it exists to pass: a cold session, with no history, should be able to
-read this brain and describe this person's life back to them in depth. If the
-answer to that would read like a timeline, the brain is a log and the curation
-failed.
+Write it so that a cold session, with no history, could read this brain and
+describe this person's life back in depth. If what it could say would read like
+a timeline, the brain is a log and the curation failed.
+
+Never hand the user a phrase to try on it. They will ask their own questions,
+about their own life, in their own words — and the answer to a question they
+actually cared about is the only one worth anything. A suggested prompt turns
+that into a demo.
 
 ## Working through a batch
 

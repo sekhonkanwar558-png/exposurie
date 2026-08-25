@@ -21,7 +21,70 @@ import { join } from 'node:path';
  * else, so the exact wording is reviewable in one place.
  *
  * resolved(ctx) -> boolean   : detected from disk, never from a claim
+ * applies(ctx)  -> boolean   : whether this step is relevant to this person
+ *
+ * `applies` is separate from `resolved` and the distinction is load-bearing. A
+ * step that does not apply is not a step waiting to be done — it is a step this
+ * person will never do, and the two look identical to a detector. Asking a
+ * Codex user on a Mac with no Claude account for their claude.ai export
+ * produces a request that CANNOT resolve: it reprints at the top of every
+ * command forever, for a file that will never exist. That is the "cries wolf"
+ * failure the curator was designed around, arriving through the one part of the
+ * product that talks directly to a person.
  */
+/**
+ * How this person installs an app, on the machine they are actually on.
+ *
+ * `process.platform` is a fact we already have. Printing the other two
+ * platforms' commands next to it makes the user do the filtering, and makes the
+ * agent guess at something that was never in question.
+ */
+function installObsidian() {
+  if (process.platform === 'darwin') return '  brew install --cask obsidian';
+  if (process.platform === 'win32') return '  winget install Obsidian.Obsidian';
+  return '  flatpak install flathub md.obsidian.Obsidian';
+}
+
+/**
+ * Install it for them, then walk them into their own brain.
+ *
+ * Installing Obsidian is not the step — SEEING the brain is. A person left at a
+ * freshly installed app with no vault open has been handed an empty window and
+ * a file picker, which is where most people stop. So the path to their brain is
+ * printed literally, because the agent knows it and they should not have to.
+ */
+function openTheBrain(ctx = {}) {
+  const where = ctx.vault || 'the brain folder';
+  const open =
+    process.platform === 'darwin'
+      ? `  open "${where}"`
+      : process.platform === 'win32'
+        ? `  explorer "${where}"`
+        : `  xdg-open "${where}"`;
+
+  return [
+    'Install it for them first:',
+    installObsidian(),
+    '',
+    'Then walk them through opening their brain. These four steps, in order:',
+    '  1. Open Obsidian.',
+    '  2. Click "Open folder as vault".',
+    '  3. Choose this exact folder:',
+    `       ${where}`,
+    '  4. Trust the vault when it asks. Nothing here runs code.',
+    '',
+    'Then tell them to press Ctrl+G (Cmd+G on a Mac) for the graph view. That',
+    'is the picture of their own head, and it is the moment this stops feeling',
+    'like a folder of notes.',
+    '',
+    'If Obsidian will not install, they can still read everything — it is plain',
+    'Markdown. Open the folder for them:',
+    open,
+    'Only send them to https://obsidian.md as a last resort, and walk them',
+    'through it in conversation. Do NOT make them run a terminal command.',
+  ];
+}
+
 export const STEPS = {
   'claude-web-export': {
     id: 'claude-web-export',
@@ -43,9 +106,92 @@ export const STEPS = {
       '   Nothing appears on screen. It has not failed — close the tab.',
       '6. When the email arrives, download the .zip into your Downloads folder',
       '   and leave it there. Do not unzip it.',
+      '7. IF THE EMAIL HAS MORE THAN ONE LINK, download every one of them.',
+      '   A large account is split across numbered zips (batch-0000,',
+      '   batch-0001...). Taking only the first looks complete and is not:',
+      '   the older conversations are LISTED in it with their text missing.',
     ],
     doneWhen: 'a data-*.zip appears in the Downloads folder',
     resolved: (ctx) => (ctx.exports?.length ?? 0) > 0,
+
+    /**
+     * Ask when there is any reason to think they use Claude, and only then.
+     *
+     * Present-and-Claude, or no readable client at all — because somebody with
+     * nothing on their machine is very likely a person who only ever used a
+     * browser, and the web is the whole of their history. What is deliberately
+     * excluded is the case in between: a machine with Codex on it and no sign
+     * of Claude anywhere. Those users get a request they can never satisfy.
+     *
+     * The cost of being wrong here is real and is the smaller one: a Codex user
+     * who also uses claude.ai in a browser will not be asked. That is a missed
+     * import. The other way round is a permanent nag, and a permanent nag
+     * teaches the person that this tool does not notice them.
+     */
+    applies: (ctx) => {
+      if ((ctx.exports?.length ?? 0) > 0) return true;
+      const clients = ctx.clients || [];
+      const usable = clients.filter((c) => c.present && c.readable);
+      if (usable.length === 0) return true; // no local history at all: the web is all they have
+      return usable.some((c) => c.id === 'claude-code');
+    },
+  },
+
+  'chatgpt-web-export': {
+    id: 'chatgpt-web-export',
+    title: 'ChatGPT chat export',
+    why:
+      'Your chatgpt.com conversations live on OpenAI servers, not on this disk. ' +
+      'There is no API for your own chat history, so only you can request them — ' +
+      'it needs your logged-in browser and your inbox.',
+    ask:
+      'Your brain is being built from the sessions on this machine right now. ' +
+      'Your ChatGPT conversations are not on here — want to grab those too? It ' +
+      'takes about a minute of clicking, then a wait.',
+    verbatim: [
+      '1. Open chatgpt.com in your browser and sign in.',
+      '2. Click your profile picture at the top-right, then Settings.',
+      '3. Open "Data controls".',
+      '4. Next to "Export data", click Export, then confirm.',
+      '5. OpenAI emails you a download link. It is usually hours, but it can',
+      '   take up to 7 DAYS. Nothing appears on screen. It has not failed.',
+      '6. THE LINK EXPIRES 24 HOURS AFTER IT ARRIVES. Download it the day the',
+      '   email lands, or it has to be requested again.',
+      '7. Put the .zip in your Downloads folder and leave it there. Do not',
+      '   unzip it. The filename does not matter — exposurie identifies it by',
+      '   what is inside.',
+      '',
+      'Two things worth telling them before they click:',
+      '  - Requesting a new export CANCELS any earlier one still pending. Ask',
+      '    once and wait.',
+      '  - Export is not available on ChatGPT Team or Business workspaces, only',
+      '    Free, Plus and Pro. If they cannot find the button, that is why —',
+      '    it is not something they are doing wrong.',
+    ],
+    doneWhen: 'a ChatGPT export zip appears in the Downloads folder',
+    resolved: (ctx) => (ctx.chatgptExports?.length ?? 0) > 0,
+
+    /**
+     * The mirror image of the claude.ai rule, and it exists for the same
+     * person: somebody setting up a brain from Codex has an OpenAI account, so
+     * asking them for a claude.ai export is asking for something they may not
+     * have — and asking them for nothing at all leaves their entire web history
+     * out of the brain.
+     *
+     * Deliberately NOT symmetric in one respect: a machine with no local
+     * history at all does not get this ask. That person is asked for their
+     * claude.ai export instead, because we cannot read a ChatGPT export with
+     * anything like the same confidence yet — see the warning at the top of
+     * extract/chatgpt.js. Asking for the file we parse better is the honest
+     * default while that is true, and this comment is the thing to delete when
+     * it stops being true.
+     */
+    applies: (ctx) => {
+      if ((ctx.chatgptExports?.length ?? 0) > 0) return true;
+      const usable = (ctx.clients || []).filter((c) => c.present && c.readable);
+      if (usable.length === 0) return false;
+      return !usable.some((c) => c.id === 'claude-code');
+    },
   },
 
   obsidian: {
@@ -58,14 +204,14 @@ export const STEPS = {
     ask:
       'Want to see your brain as an actual linked graph? Obsidian is free and ' +
       'opens the folder as-is — nothing gets converted or locked in.',
-    verbatim: [
-      'Try installing it for them first, then fall back to asking:',
-      '  Windows:  winget install Obsidian.Obsidian',
-      '  macOS:    brew install --cask obsidian',
-      '  Linux:    flatpak install flathub md.obsidian.Obsidian',
-      'If none of those work, send them to https://obsidian.md and walk them',
-      'through it in conversation. Do NOT tell them to run a terminal command.',
-    ],
+    // One line, for the machine this is actually running on.
+    //
+    // This used to print all three package managers and tell the agent to pick.
+    // That is the generalising this product is against: `winget` on a Mac is
+    // noise the user has to filter, and an agent handed three options in a
+    // pending step is being asked to guess at something `process.platform`
+    // already knows. The tool knows the setup, so the tool says the line.
+    verbatim: (ctx) => openTheBrain(ctx),
     doneWhen: 'the user says it is installed, or an Obsidian vault config appears',
     resolved: (ctx) => ctx.obsidianInstalled === true,
   },
@@ -73,10 +219,23 @@ export const STEPS = {
 
 /** Steps still outstanding, given detected state. Order is catalog order. */
 export function unresolved(ctx = {}, ids = Object.keys(STEPS)) {
-  return ids.map((id) => STEPS[id]).filter((s) => s && !s.resolved(ctx));
+  return ids
+    .map((id) => STEPS[id])
+    .filter((s) => s && (!s.applies || s.applies(ctx)) && !s.resolved(ctx));
 }
 
 const dir = (vault) => join(vault, '.exposurie', 'pending');
+
+/**
+ * A step's instructions, resolved against this machine.
+ *
+ * Static text cannot name the folder the brain is actually in, and "choose your
+ * vault folder" is exactly the generalising this product is against when the
+ * path is a fact we hold.
+ */
+export function lines(step, ctx = {}) {
+  return typeof step.verbatim === 'function' ? step.verbatim(ctx) : step.verbatim;
+}
 
 /**
  * Mirror a step to disk. The terminal scrolls away; a file is still there
@@ -98,7 +257,7 @@ export function record(vault, step) {
     '',
     '## What to do',
     '',
-    ...step.verbatim,
+    ...lines(step, { vault }),
     '',
     `**Done when:** ${step.doneWhen}`,
     '',

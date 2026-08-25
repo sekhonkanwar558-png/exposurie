@@ -13,6 +13,11 @@ import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
+import { readTranscript } from './extract/transcript.js';
+import { readRollout } from './extract/codex.js';
+import { openZip } from './extract/zip.js';
+import { SIGNATURE as CHATGPT_SIGNATURE } from './extract/chatgpt.js';
+
 const HOME = homedir();
 const SEP = String.fromCharCode(92); // backslash, written this way to survive shell heredocs
 
@@ -35,6 +40,18 @@ function walk(dir, match, depth = 6, acc = []) {
 
 const isJsonl = (n) => n.endsWith('.jsonl');
 
+/**
+ * Every client, with the reader that backs its claim.
+ *
+ * `read` lives here on purpose. Codex was marked `readable: true` for a whole
+ * release with no reader of its own: the Claude Code parser was pointed at a
+ * completely different file format, returned zero turns from every rollout, and
+ * the sync marked all three sessions read. Nothing errored, the session count
+ * was correct, and the conversations simply were not there.
+ *
+ * With the reader in the table, `readable: true` and "there is a function that
+ * reads it" are the same statement, and a test can check the two agree.
+ */
 export const CLIENTS = [
   {
     id: 'claude-code',
@@ -42,6 +59,7 @@ export const CLIENTS = [
     root: join(HOME, '.claude'),
     readable: true,
     find: (root) => walk(join(root, 'projects'), isJsonl),
+    read: readTranscript,
   },
   {
     id: 'codex',
@@ -50,6 +68,7 @@ export const CLIENTS = [
     readable: true,
     // sessions/YYYY/MM/DD/rollout-<iso>-<uuid>.jsonl
     find: (root) => walk(join(root, 'sessions'), (n) => n.startsWith('rollout-') && isJsonl(n)),
+    read: readRollout,
   },
   {
     id: 'cursor',
@@ -73,22 +92,118 @@ export const CLIENTS = [
   },
 ];
 
-/** claude.ai export zips, left where the browser put them. */
+/**
+ * Chat exports, left where the browser put them.
+ *
+ * Identified by what is INSIDE the zip, not by its name. Anthropic's download
+ * is reliably `data-*.zip`; OpenAI's is not reliably anything, and a filename
+ * rule would either miss every ChatGPT export or claim unrelated archives. The
+ * two are told apart by their contents with no ambiguity:
+ *
+ *   claude.ai   conversations.json + users.json / projects/
+ *   ChatGPT     conversations.json + chat.html
+ *
+ * This costs a central-directory read per zip and never inflates anything —
+ * the index sits at the end of the file, so it is the same small read whether
+ * the archive is 5 MB or 5 GB.
+ */
+/** Names Anthropic and OpenAI actually give their downloads. */
+const LOOKS_LIKE_AN_EXPORT = [/^data-.*\.zip$/i, /chatgpt/i, /^conversations.*\.zip$/i];
+
+function sniff(path, filename) {
+  let zip;
+  try {
+    zip = openZip(path);
+    const names = zip.names();
+    if (!names.includes('conversations.json')) return null;
+    if (names.includes(CHATGPT_SIGNATURE)) return 'chatgpt';
+    if (
+      names.includes('users.json') ||
+      names.includes('memories.json') ||
+      names.some((n) => n.startsWith('projects/') || n.startsWith('design_chats/'))
+    ) {
+      return 'claude';
+    }
+    // Anthropic's download is reliably named this way. It is a weaker signal
+    // than a marker file, which is why it is last rather than first — but a
+    // stripped-down export that carries only `conversations.json` is still
+    // theirs, and refusing it would lose a whole history over a missing
+    // `users.json`.
+    if (/^data-.*\.zip$/i.test(filename)) return 'claude';
+    // conversations.json and nothing that identifies it. Do not guess: handing
+    // a file to the wrong reader is the failure this function is shaped around.
+    return null;
+  } catch (e) {
+    // A zip that will not open is only OUR problem if it was plausibly an
+    // export. Reporting every corrupt archive in someone's Downloads folder is
+    // noise; saying nothing about a half-downloaded `data-*.zip` is the silent
+    // failure this product keeps finding, moved down a layer — the file is
+    // sitting right there and the tool says "nothing has changed".
+    if (LOOKS_LIKE_AN_EXPORT.some((re) => re.test(filename))) {
+      return { kind: 'broken', error: e.message || String(e) };
+    }
+    return null;
+  } finally {
+    if (zip) zip.close();
+  }
+}
+
 export function findExports() {
   const dirs = [join(HOME, 'Downloads'), join(HOME, 'Desktop')];
   const out = [];
   for (const d of dirs) {
     if (!existsSync(d)) continue;
+    let entries;
     try {
-      for (const f of readdirSync(d)) {
-        if (/^data-.*\.zip$/i.test(f)) {
-          const p = join(d, f);
-          out.push({ path: p, size: statSync(p).size });
-        }
+      entries = readdirSync(d);
+    } catch {
+      continue;
+    }
+    for (const f of entries) {
+      if (!/\.zip$/i.test(f)) continue;
+      const p = join(d, f);
+      let size;
+      try {
+        size = statSync(p).size;
+      } catch {
+        continue;
       }
-    } catch {}
+      const kind = sniff(p, f);
+      if (!kind) continue;
+      if (typeof kind === 'object') out.push({ path: p, size, kind: 'broken', error: kind.error });
+      else out.push({ path: p, size, kind });
+    }
   }
   return out;
+}
+
+/**
+ * Is Obsidian on this machine?
+ *
+ * Nothing in the product needs it — the brain is plain Markdown and the agent
+ * reads the files. It is here because seeing the graph is the moment most
+ * people start believing the thing is real, and that moment is the whole
+ * retention problem.
+ *
+ * Detected, never marked. The step it gates was in the catalog for a release
+ * with every caller hardcoding `false`, which meant it could never resolve: had
+ * it ever been shown, it would have asked forever and taught the user that the
+ * tool does not notice when they do what it asks. "Done is detected" is not a
+ * style preference — without a detector, a step is a nag.
+ *
+ * The config folder is the signal rather than the binary: it appears when
+ * Obsidian is first RUN, and an installed-but-never-opened copy has not
+ * actually got the person to their graph.
+ */
+const OBSIDIAN_PATHS = [
+  join(HOME, 'AppData', 'Roaming', 'obsidian'), // Windows
+  join(HOME, 'Library', 'Application Support', 'obsidian'), // macOS
+  join(HOME, '.config', 'obsidian'), // Linux
+  join(HOME, '.var', 'app', 'md.obsidian.Obsidian'), // Linux, flatpak
+];
+
+export function obsidianInstalled() {
+  return OBSIDIAN_PATHS.some((p) => existsSync(p));
 }
 
 export const configPath = () => join(HOME, '.exposurie', 'config.json');
@@ -153,6 +268,7 @@ export function brokenConfig(state) {
 
 /** One call, everything a command needs to decide what to print. */
 export function detect() {
+  const exports = findExports();
   const clients = CLIENTS.map((c) => {
     const present = existsSync(c.root);
     const files = present ? c.find(c.root) : [];
@@ -166,7 +282,10 @@ export function detect() {
   return {
     home: HOME,
     clients,
-    exports: findExports(),
+    exports: exports.filter((e) => e.kind === 'claude'),
+    chatgptExports: exports.filter((e) => e.kind === 'chatgpt'),
+    brokenExports: exports.filter((e) => e.kind === 'broken'),
+    obsidianInstalled: obsidianInstalled(),
     config,
     configStatus: cfg.status,
     configError: cfg.status === 'unreadable' ? cfg : null,
