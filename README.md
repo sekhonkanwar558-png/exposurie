@@ -136,7 +136,7 @@ to two places with two owners:
 | **ours** — in the package, we update it | **yours** — copied into your brain, yours forever |
 |---|---|
 | the librarian (search, page, section) | the schema |
-| the extractor | the sync procedure |
+| the extractor (reading your transcripts) | the sync procedure |
 | the curator's checks, and its two safe fixes | **the wiki-building prompt** |
 | the pointer that tells your agent this exists | the curation procedure, and the findings you have retired |
 | the config reader | page templates, worked examples, exclude list, every page you have |
@@ -166,6 +166,27 @@ names from there. So if `wiki/people` suits you better, rename the folder, say
 so in that file, and search follows you. Without that seam the failure is
 silent: renaming a folder would make half the brain invisible with nothing
 reporting it.
+
+## The one thing it writes outside your brain
+
+Your agent can only use the brain if it knows the brain exists. So setup writes
+one short block into the instructions file each agent already loads at the start
+of every session:
+
+| agent | file |
+|---|---|
+| Claude Code | `~/.claude/CLAUDE.md` |
+| Codex | `~/.codex/AGENTS.md` |
+| Cursor | `~/.cursor/rules/exposurie.mdc` |
+
+That block is **a pointer, never content.** It says a brain exists, that it is
+authoritative about you, and gives the one command for searching it. It carries
+no pages and no facts of yours, because it is paid for on every message in every
+project forever — so it stays small enough to earn that.
+
+**This is the only thing exposurie puts anywhere outside your brain folder.**
+`uninstall` takes it back out and returns every one of those files
+**byte-identical** — see [Leaving](#leaving).
 
 ## It works out your setup and talks to that
 
@@ -458,6 +479,10 @@ platforms' branches are covered by the test suite.
 
 Your brain is **local files on your disk.** Nothing is uploaded, there is no
 account, and there is no server to send anything to.
+
+The only thing written outside your brain folder is a short pointer block in
+each agent's own instructions file, and `uninstall` removes it — see
+[The one thing it writes outside your brain](#the-one-thing-it-writes-outside-your-brain).
 
 `exposurie` never creates a backup remote for you. It runs `git init` on your
 brain so you get local history and undo, warns you that it lives on one disk, and
