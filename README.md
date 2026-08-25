@@ -444,6 +444,32 @@ will push to a remote **you** configured. Creating that remote is a decision wit
 one irreversible failure mode — a visibility flag wrong once and every
 conversation you have ever had with an AI is public — so it stays yours to make.
 
+## Leaving
+
+One command, and you can type it yourself — no agent involved:
+
+```bash
+npx @sekhon/exposurie uninstall
+```
+
+It removes the pointer from every client it was written into. Your own
+instructions files come back **byte-identical** — the block goes, the blank
+line above it goes, and a file that only ever held our block is deleted rather
+than left empty.
+
+**It does not touch your brain, and no flag makes it.** Those are your pages,
+in plain Markdown, in a git repo with its own history — they open in Obsidian,
+in any editor, in anything that reads text, with this tool gone and forever
+after. If you want them gone, delete the folder yourself. A tool that can erase
+the thing it spent months building for you is not one you should have trusted
+with it.
+
+If you installed globally rather than using `npx`, the last line is
+`npm uninstall -g @sekhon/exposurie`.
+
+Changed your mind later? Run `scaffold` again and it picks up exactly where you
+left off — what has been synced is recorded inside the brain, not in the tool.
+
 ## Development
 
 ```bash

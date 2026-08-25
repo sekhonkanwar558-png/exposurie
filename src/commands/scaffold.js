@@ -269,7 +269,9 @@ export function scaffold({ at } = {}) {
     ...wrap(
       'A few hundred bytes per client, between exposurie markers, appended to a ' +
         'file that otherwise belongs to the user. The schema stays in the brain. ' +
-        'Remove it any time by deleting the marked block.',
+        'It comes back out whenever they want, in one command they can type ' +
+        'themselves — `exposurie uninstall` — which leaves their own files ' +
+        'byte-identical and never touches the brain.',
       74,
       '  ',
     ),
