@@ -178,12 +178,14 @@ export function init({ at } = {}) {
     '',
     'NOT IN THIS VERSION',
     ...wrap(
-      'Only conversation is read — sessions on this machine and claude.ai chats ' +
-        'from an export. Files are not: notes, documents and PDFs dropped into the ' +
-        'brain are stored and linked, never ingested, and the documents attached to ' +
-        'a claude.ai Project are listed but not opened. ChatGPT history is not read ' +
-        'at all — there is no reader for its export yet. Do not invent a command ' +
-        'for any of that.',
+      'Only conversation is read — Claude Code, Codex and Cursor on this machine, ' +
+        'plus claude.ai and ChatGPT chats from an export. Files are not: notes, ' +
+        'documents and PDFs dropped into the brain are stored and linked rather ' +
+        'than ingested, and documents attached to a claude.ai Project are listed ' +
+        'but not opened. The ChatGPT reader has never met a real export, so it ' +
+        'reports a parse it cannot do instead of pretending the account is empty. ' +
+        'opencode, Gemini CLI, Windsurf and Aider are not read. Do not invent a ' +
+        'command for any of that.',
       74,
       '  ',
     ),

@@ -192,8 +192,9 @@ function stage(vault, d) {
 
   // Candidates: readable clients only, and only transcripts with unread bytes.
   const candidates = [];
+  const clientErrors = [];
   for (const c of d.clients) {
-    if (!c.readable || !c.present) continue;
+    if (!c.readable || !c.present || typeof c.sessions === 'function') continue;
     for (const f of c.files) {
       let size;
       try {
@@ -213,6 +214,26 @@ function stage(vault, d) {
         size,
         from,
         sortAt: statSync(f).mtimeMs,
+      });
+    }
+  }
+
+  // Clients that keep conversations in a database rather than in files. Same
+  // resumption contract as a web chat: a row has no byte offset, so freshness
+  // is the key.
+  for (const c of d.clients) {
+    if (!c.readable || !c.present || typeof c.sessions !== 'function') continue;
+    const { sessions, error } = c.sessions(c.root);
+    if (error) clientErrors.push({ client: c.name, error });
+    for (const s of sessions) {
+      const prior = seen[s.path];
+      if (prior && prior.updatedAt && prior.updatedAt === s.updatedAt) continue;
+      candidates.push({
+        kind: 'webchat', // "already a session, not a path" — the same handling
+        path: s.path,
+        client: c.id,
+        session: s,
+        sortAt: Date.parse(s.updatedAt || s.endedAt || '') || 0,
       });
     }
   }
@@ -499,6 +520,9 @@ function stage(vault, d) {
   // indistinguishable from "you have no web chats" unless we say so.
   for (const f of web.failed) {
     summary.push(['EXPORT UNREADABLE', `${basename(f.path)} — ${f.error}`]);
+  }
+  for (const e of clientErrors) {
+    summary.push([`${e.client.toUpperCase()} UNREADABLE`, e.error]);
   }
 
   return {

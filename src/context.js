@@ -16,6 +16,7 @@ import { homedir } from 'node:os';
 import { readTranscript } from './extract/transcript.js';
 import { readRollout } from './extract/codex.js';
 import { openZip } from './extract/zip.js';
+import { cursorRoot, readCursorSessions, countCursorSessions, cursorMtime } from './extract/cursor.js';
 import { SIGNATURE as CHATGPT_SIGNATURE } from './extract/chatgpt.js';
 
 const HOME = homedir();
@@ -73,22 +74,19 @@ export const CLIENTS = [
   {
     id: 'cursor',
     name: 'Cursor',
-    root: join(HOME, '.cursor'),
-    // Layout confirmed: projects/<slug>/agent-transcripts/<uuid>/ — but the
-    // files inside were never observed, so no reader is claimed.
-    readable: false,
-    find: (root) => {
-      const base = join(root, 'projects');
-      if (!existsSync(base)) return [];
-      const out = [];
-      for (const slug of readdirSync(base)) {
-        const t = join(base, slug, 'agent-transcripts');
-        if (existsSync(t)) {
-          for (const id of readdirSync(t)) out.push(join(t, id));
-        }
-      }
-      return out;
-    },
+    // NOT `~/.cursor`. That folder holds extensions and per-project scaffolding,
+    // and its `agent-transcripts` directories are empty — the previous version
+    // of this entry counted them and reported "2 found, NO READER YET", which
+    // was an honest statement about a reader we lacked and a wrong one about
+    // what was there. The conversations are in Cursor's app data, in SQLite.
+    root: cursorRoot() || join(HOME, '.cursor'),
+    readable: true,
+    // Its unit is a row in a database, not a file on disk, so it yields
+    // sessions directly rather than paths for someone else to open.
+    find: () => [],
+    sessions: readCursorSessions,
+    count: countCursorSessions,
+    mtime: cursorMtime,
   },
 ];
 
@@ -272,7 +270,9 @@ export function detect() {
   const clients = CLIENTS.map((c) => {
     const present = existsSync(c.root);
     const files = present ? c.find(c.root) : [];
-    return { ...c, present, count: files.length, files };
+    // A client whose conversations are not files counts them its own way.
+    const count = present && c.count ? c.count(c.root) : files.length;
+    return { ...c, present, count, files };
   });
 
   const cfg = configState();

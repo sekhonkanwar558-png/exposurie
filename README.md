@@ -20,9 +20,9 @@ session, so you can open a fresh one every time and lose nothing.
   of carrying everything in every session.
 
 > **Status: early.** The chain works end to end — `init`, `scaffold`, `sync` and
-> `read`. You can create a brain, fill it from Claude Code, Codex and your
-> claude.ai chat export in resumable batches, and open any page or any section of
-> one in a single command. Curation runs inside every sync. Files are still not
+> `read`. You can create a brain, fill it from Claude Code, Codex, Cursor and
+> your claude.ai chat export in resumable batches, and open any page or any
+> section of one in a single command. Curation runs inside every sync. Files are still not
 > ingested: only conversation is read, so notes, documents and PDFs are stored
 > and linked rather than folded in. The ChatGPT export has a reader that has not
 > yet met a real export — see below. Nothing is published to npm. This repo is
@@ -138,6 +138,7 @@ have different lives on their disks.
 |---|---|---|---|
 | **Claude Code user** | `~/.claude` transcripts | their claude.ai export | ChatGPT |
 | **Codex user** | `~/.codex` rollouts | their ChatGPT export | claude.ai |
+| **Cursor user** | its SQLite chat store | their ChatGPT export | claude.ai |
 | **Neither** | nothing local | their claude.ai export | — |
 
 The rule underneath: **a step that a person can never complete is worse than no
@@ -199,6 +200,30 @@ archive that holds conversations and yields no words from any of them is
 reported as **a bug in exposurie**, by name, rather than as an empty account. If
 the shape is wrong, the first person to run it finds out, instead of getting a
 brain that quietly contains nobody.
+
+## Cursor keeps its chats in SQLite, so we read SQLite
+
+Cursor does not write transcript files. `~/.cursor/projects/*/agent-transcripts/`
+looks exactly like it should hold them and is **empty** — the previous release
+counted those directories and reported "2 found, NO READER YET", which was an
+honest statement about a reader it lacked and a wrong one about what was there.
+
+The conversations are in `state.vscdb`, in a key/value table: `composerData:<id>`
+for the conversation and its message *order*, `bubbleId:<composer>:<id>` for each
+message. Everything else in a message is tool work — measured on a real
+database, 443 messages held 103 with any text and 31 from the person.
+
+So there is a SQLite reader here, in about 300 lines against no dependencies. It
+is read-only and understands exactly enough to walk one table: the header, the
+`sqlite_master` b-tree, table pages, the record format, **overflow chains** —
+a conversation blob does not fit in one page, and ignoring the chain returns
+truncated JSON that fails to parse and looks like a corrupt database rather than
+like our bug — and the **write-ahead log**, because Cursor is usually running
+and its newest conversations have not reached the main file yet.
+
+Shelling out to a `sqlite3` binary would have been shorter and would have failed
+on every machine without one, silently reporting that the person has no Cursor
+history.
 
 ## What sync actually reads
 

@@ -161,10 +161,28 @@ test('wrap never splits a word and honours the indent', () => {
 
 // ---------------------------------------------------------------- honesty
 test('a client we cannot parse is reported, not silently dropped', () => {
+  // This named Cursor until Cursor got a reader. Naming a client was always the
+  // weaker version of the rule — the rule is that a client we cannot read is
+  // VISIBLE and uncounted, whichever client that happens to be this month.
   const r = init({});
-  const cursor = r.json.clients.find((c) => c.id === 'cursor');
-  assert.ok(cursor, 'cursor must appear in output even without a reader');
-  assert.equal(cursor.readable, false);
-  // and it must not be counted in the number we promise to build from
-  assert.ok(r.json.sessions >= 0);
+  for (const c of r.json.clients) {
+    assert.equal(typeof c.readable, 'boolean', `${c.id} does not say whether it can be read`);
+    assert.equal(typeof c.count, 'number', `${c.id} does not say how much it found`);
+  }
+  const unreadable = r.json.clients.filter((c) => c.present && !c.readable);
+  const counted = r.json.clients
+    .filter((c) => c.present && c.readable)
+    .reduce((n, c) => n + c.count, 0);
+  assert.equal(
+    r.json.sessions,
+    counted,
+    'the promised session count includes clients nothing can read',
+  );
+  for (const c of unreadable) {
+    assert.match(
+      r.body.join(String.fromCharCode(10)),
+      new RegExp('NO READER YET'),
+      `${c.id} is present and unreadable but the output never says so`,
+    );
+  }
 });
