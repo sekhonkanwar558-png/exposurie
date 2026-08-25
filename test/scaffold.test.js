@@ -334,14 +334,14 @@ test('the state line stops claiming there is no brain, and drops the arrow', () 
 
 // --------------------------------------------------- the frontier tells truth
 //
-// `init` prints a NOT IN THIS VERSION block. It rotted once in the direction
+// `init` prints a SCOPE block. It rotted once in the direction
 // nobody checks: it went on denying `read` and the client pointer for a whole
 // release after both shipped, while `scaffold` printed the REACH table three
 // lines below it. Denying a capability we have is the same lie as promising one
 // we lack, so the block is pinned against what is actually built.
 
 function frontier(out) {
-  const i = out.indexOf('NOT IN THIS VERSION');
+  const i = out.indexOf('SCOPE');
   if (i === -1) return '';
   const rest = out.slice(i);
   const end = rest.indexOf('EXIT');

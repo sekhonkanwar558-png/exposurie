@@ -180,7 +180,7 @@ export function init({ at } = {}) {
   // a test now pins this text against the command table.
   const frontier = [
     '',
-    'NOT IN THIS VERSION',
+    'SCOPE',
     ...wrap(
       'Conversation is read directly — Claude Code, Codex and Cursor on this ' +
         'machine, plus claude.ai and ChatGPT chats from an export. Files dropped ' +

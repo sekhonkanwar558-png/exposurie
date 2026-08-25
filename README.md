@@ -92,7 +92,7 @@ DO THESE IN ORDER
       too? It takes about a minute of clicking, then a wait."
       Do NOT wait for an answer. Continue to the next step.
 
-NOT IN THIS VERSION
+SCOPE
   Conversation is read directly — Claude Code, Codex and Cursor on this
   machine, plus claude.ai and ChatGPT chats from an export. Files dropped
   in raw/ are FOUND and handed to you to open... Do not invent a command
