@@ -27,6 +27,7 @@ function main(argv) {
         search: { type: 'string' },
         outline: { type: 'boolean' },
         full: { type: 'boolean' },
+        because: { type: 'string' },
       },
     });
   } catch (e) {

@@ -6,7 +6,7 @@
 // input, and the human step is never a gate.
 
 import { detect, tilde } from '../context.js';
-import { unresolved, record } from '../pending.js';
+import { unresolved, record, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
 import { DEFAULT_VAULT, expandPath, vaultState } from '../vault.js';
@@ -83,7 +83,7 @@ export function init({ at } = {}) {
   }
 
   // Detection decides what is still owed, so a step cannot be falsely closed.
-  const ctx = { exports: d.exports, obsidianInstalled: d.obsidianInstalled, clients: d.clients, chatgptExports: d.chatgptExports, retention: d.retention };
+  const ctx = stepCtx(d);
   const open = unresolved(ctx, ['claude-code-retention', 'claude-web-export', 'chatgpt-web-export', 'obsidian']);
 
   // Counted, not just detected. "1 export found" and "93 conversations, ready"

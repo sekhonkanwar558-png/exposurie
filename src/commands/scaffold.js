@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { detect, tilde, configPath, brokenConfig } from '../context.js';
 import { reachAll } from '../reach.js';
-import { unresolved, record } from '../pending.js';
+import { unresolved, record, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
 import { version } from '../version.js';
@@ -231,16 +231,12 @@ export function scaffold({ at } = {}) {
   // a user's agent sitting in a code repo has no idea a brain exists.
   const reach = reachAll();
 
-  const open = unresolved(
-    {
-      exports: d.exports,
-      obsidianInstalled: d.obsidianInstalled,
-      clients: d.clients,
-      chatgptExports: d.chatgptExports,
-      retention: d.retention,
-    },
-    ['claude-code-retention', 'claude-web-export', 'chatgpt-web-export', 'obsidian'],
-  );
+  const open = unresolved(stepCtx(d, target), [
+    'claude-code-retention',
+    'claude-web-export',
+    'chatgpt-web-export',
+    'obsidian',
+  ]);
   // Now that a brain exists, an open step is mirrored to disk as well as
   // printed. Auto mode blows past a terminal; a file is still there tomorrow.
   for (const p of open) record(target, p);

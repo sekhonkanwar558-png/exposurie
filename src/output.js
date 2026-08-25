@@ -18,7 +18,7 @@
 //     is attached to output it already reads, not to documentation we hope it
 //     read once.
 
-import { SYNC, exists } from './commands/names.js';
+import { SYNC, DECLINE, exists } from './commands/names.js';
 
 const INDENT = '  ';
 
@@ -174,6 +174,15 @@ export function pendingBlock(pending) {
       for (const line of mine) out.push(`${INDENT}      ${line}`);
     }
     if (p.doneWhen) out.push(`${INDENT}  DONE WHEN: ${p.doneWhen}`);
+    // The other answer. Without this line the catalog can only ever be told
+    // yes: a person says no, the agent has nowhere to put that, and the step
+    // reprints at the top of every command for the rest of the install. Every
+    // requirement in pending.js is about a step not getting buried; this is the
+    // one about a step not outstaying the decision.
+    if (exists(DECLINE)) {
+      out.push(`${INDENT}  IF THEY SAY NO, RECORD IT — it stops asking, and it is reversible:`);
+      out.push(`${INDENT}      exposurie ${DECLINE} ${p.id} --because "<their words>"`);
+    }
     out.push(`${INDENT}  This does NOT block anything. Keep working.`);
   }
   return out;

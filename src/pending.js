@@ -12,8 +12,24 @@
 //
 // "Done" is DETECTED, never marked. Nobody has to remember to tick a box, and
 // a step cannot be falsely closed by an agent that assumed it worked.
+//
+// There is exactly one exception, and it is the third state below: DECLINED.
+// A person can say no, and no amount of looking at the disk will ever detect
+// that. Without it requirement 3 eats itself — "repeat until done" becomes
+// "repeat forever" for anything the user has decided against, which is the
+// cries-wolf failure this catalog was built to avoid, arriving through the one
+// door the design was most careful about. Declining is NOT done, never makes
+// `resolved` true, and is written in the user's own words to a file in their
+// own brain that they can delete to bring the step back.
 
-import { existsSync, mkdirSync, writeFileSync, readdirSync, unlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readdirSync,
+  unlinkSync,
+  readFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -22,6 +38,11 @@ import { join } from 'node:path';
  *
  * resolved(ctx) -> boolean   : detected from disk, never from a claim
  * applies(ctx)  -> boolean   : whether this step is relevant to this person
+ *
+ * A third thing closes a step and is not a field here, because it is not a
+ * property of the step: DECLINED, recorded per-brain on disk by decline().
+ * The three are different questions — "has it happened", "is it relevant",
+ * "was it refused" — and collapsing any two of them loses a real case.
  *
  * `applies` is separate from `resolved` and the distinction is load-bearing. A
  * step that does not apply is not a step waiting to be done — it is a step this
@@ -277,14 +298,123 @@ export const STEPS = {
   },
 };
 
-/** Steps still outstanding, given detected state. Order is catalog order. */
+/**
+ * The context every gate reads, built in ONE place.
+ *
+ * Both callers used to assemble this by hand from the same detect() result,
+ * which is fine until a gate needs a field the hand-written copies do not have
+ * — and then the mechanism works perfectly in isolation and does nothing in the
+ * product. That is exactly how the decline filter shipped broken the first
+ * time: `vault` was absent from both literals, so a refusal was recorded and
+ * then ignored on every command. Build it here or the drift comes back.
+ */
+export function stepCtx(d = {}, vault = d.vault) {
+  return {
+    vault,
+    exports: d.exports,
+    chatgptExports: d.chatgptExports,
+    obsidianInstalled: d.obsidianInstalled,
+    clients: d.clients,
+    retention: d.retention,
+  };
+}
+
+/**
+ * Steps still outstanding, given detected state. Order is catalog order.
+ *
+ * Three gates, and the order they are written in is the order of cost: a step
+ * that does not apply was never this person's, a step already done needs no
+ * asking, and a step they refused is theirs to have refused.
+ *
+ * Declines are read from `ctx.vault` when there is one. A caller that omits it
+ * gets the old behaviour — the step reprints — which is the correct direction
+ * to fail in: nagging about something settled is a nuisance, silently burying
+ * a step nobody decided on is the bug.
+ */
 export function unresolved(ctx = {}, ids = Object.keys(STEPS)) {
+  const no = ctx.vault ? declined(ctx.vault) : new Set();
   return ids
     .map((id) => STEPS[id])
-    .filter((s) => s && (!s.applies || s.applies(ctx)) && !s.resolved(ctx));
+    .filter((s) => s && (!s.applies || s.applies(ctx)) && !s.resolved(ctx) && !no.has(s.id));
 }
 
 const dir = (vault) => join(vault, '.exposurie', 'pending');
+const declinedDir = (vault) => join(vault, '.exposurie', 'declined');
+
+/** The ids this brain's owner has said no to. Unknown ids are ignored. */
+export function declined(vault) {
+  if (!vault || !existsSync(declinedDir(vault))) return new Set();
+  const out = new Set();
+  for (const f of readdirSync(declinedDir(vault))) {
+    const id = f.replace(/\.md$/, '');
+    // Only ids we still ship. A decline left over from a step that has since
+    // been removed is inert rather than an error, and a stray file somebody
+    // dropped in here cannot invent a step.
+    if (STEPS[id]) out.add(id);
+  }
+  return out;
+}
+
+/**
+ * Record that the user said no. Their words, not a paraphrase and not a flag.
+ *
+ * Everything else in this file refuses to take a claim as evidence, and this
+ * is the one place that must — a decision leaves no trace on disk to detect.
+ * So the guard is different in kind: it is written down, in the user's own
+ * brain, in their own words, where they can read it back and undo it without
+ * this tool. A decline an agent invented is visible as one, because the reason
+ * line is either something the person said or it is empty.
+ */
+export function decline(vault, id, reason) {
+  const step = STEPS[id];
+  if (!vault || !step) return null;
+  const d = declinedDir(vault);
+  mkdirSync(d, { recursive: true });
+  const path = join(d, `${id}.md`);
+  const said = (reason || '').trim();
+  writeFileSync(
+    path,
+    [
+      `# ${step.title} — set aside`,
+      '',
+      `You decided against this on ${new Date().toISOString().slice(0, 10)}.`,
+      'exposurie will stop asking. Nothing about your brain is worse for it —',
+      'this step was never blocking anything.',
+      '',
+      '## What you said',
+      '',
+      said ? `> ${said}` : '_No reason recorded._',
+      '',
+      '## If you change your mind',
+      '',
+      'Delete this file. The step comes back on the next command, exactly as',
+      'it was. That is the whole undo — there is no command to remember.',
+      '',
+      '## What the step was',
+      '',
+      step.why,
+      '',
+      `**It would have been done when:** ${step.doneWhen}`,
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  // The reminder and the refusal cannot both stand. reap() would clear this on
+  // the next command anyway; doing it here means the file is gone by the time
+  // the agent reports back, rather than one command later.
+  try {
+    unlinkSync(join(dir(vault), `${id}.md`));
+  } catch {}
+  return path;
+}
+
+/** What a recorded decline says, for a caller that wants to show it back. */
+export function declineReason(vault, id) {
+  const path = join(declinedDir(vault), `${id}.md`);
+  if (!existsSync(path)) return null;
+  const m = readFileSync(path, 'utf8').match(/^> (.+)$/m);
+  return m ? m[1] : '';
+}
 
 /**
  * A step's instructions, resolved against this machine.
@@ -337,7 +467,10 @@ export function record(vault, step) {
 /** Remove the disk record once detection says the step is done. */
 export function reap(vault, ctx = {}) {
   if (!vault || !existsSync(dir(vault))) return [];
-  const open = new Set(unresolved(ctx).map((s) => s.id));
+  // The vault rides along so a declined step counts as closed here too —
+  // otherwise the refusal is honoured in the output and contradicted by a
+  // reminder file still sitting in the brain.
+  const open = new Set(unresolved({ ...ctx, vault }).map((s) => s.id));
   const gone = [];
   for (const f of readdirSync(dir(vault))) {
     const id = f.replace(/\.md$/, '');

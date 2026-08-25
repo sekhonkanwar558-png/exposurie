@@ -13,6 +13,7 @@ import { init } from './init.js';
 import { scaffold } from './scaffold.js';
 import { sync } from './sync.js';
 import { read } from './read.js';
+import { decline } from './decline.js';
 import { OK } from '../exit-codes.js';
 import { NAMES } from './names.js';
 
@@ -32,6 +33,10 @@ export const COMMANDS = {
   read: {
     summary: 'open a page, one section of it, or find which page holds a thing',
     run: (v, pos) => read(v, pos),
+  },
+  decline: {
+    summary: 'record that your user said no to a pending step, so it stops asking',
+    run: (v, pos) => decline(v, pos),
   },
   help: {
     summary: 'this',
@@ -63,6 +68,7 @@ export function helpText() {
     '  --at <path>     where the brain should live (default ~/brain)',
     '  --json          machine-readable output instead of the task list',
     '  --done          (sync) the pages are written; move the cutoff',
+    '  --because "..." (decline) what your user actually said',
     '',
     'READING',
     '  exposurie read "<page>"                     the page, or a map if large',
