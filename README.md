@@ -72,7 +72,7 @@ STATE
   brain        not created  (will go at ~/brain)
   claude-code  125 sessions   (~/.claude)
   codex        3 sessions   (~/.codex)
-  cursor       2 found, NO READER YET — will be skipped   (~/.cursor)
+  cursor       2 sessions   (~/.cursor)
   web chats    not found
 
 DO THESE IN ORDER
@@ -232,9 +232,9 @@ brain that quietly contains nobody.
 ## Cursor keeps its chats in SQLite, so we read SQLite
 
 Cursor does not write transcript files. `~/.cursor/projects/*/agent-transcripts/`
-looks exactly like it should hold them and is **empty** — the previous release
-counted those directories and reported "2 found, NO READER YET", which was an
-honest statement about a reader it lacked and a wrong one about what was there.
+looks exactly like it should hold them and is **empty**. It is a directory that
+exists and stays unwritten, so counting it tells you nothing about whether a
+person has any chats — which is exactly the trap it looks like.
 
 The conversations are in `state.vscdb`, in a key/value table: `composerData:<id>`
 for the conversation and its message *order*, `bubbleId:<composer>:<id>` for each
@@ -277,8 +277,9 @@ What follows from that:
   all — archives, executables, video — are listed with the reason. A person who
   put a file in their brain should be told it was left alone, not left to assume
   it landed.
-- **Files alone are a batch.** Somebody whose brain is entirely documents used to
-  get "nothing has changed since the last sync" while the folder filled up.
+- **Files alone are a batch.** Somebody whose brain is entirely documents gets a
+  sync that stages them, rather than "nothing has changed since the last sync"
+  while the folder fills up.
 - **A changed file comes back.** A document is not append-only, so there is no
   offset to resume from; size and modification time are what say "this exact file
   was already handed over".
@@ -429,24 +430,15 @@ Two things it deliberately does not do:
   that can never reach zero is a report nobody reads. The tool prints the exact
   line that retires one, and always prints how many are retired.
 
-## What is verified on which platform
+## Platforms and clients
 
-Developed on Windows, shipped for both. Being explicit about the difference,
-because "no sessions found" on a machine nobody can debug is the worst possible
-first run:
+**Windows and macOS.** Claude Code, Codex and Cursor on both. claude.ai and
+ChatGPT exports are platform-independent, and Obsidian is detected wherever it
+is installed.
 
-| | Windows | macOS |
-|---|---|---|
-| Claude Code | run against 162 real sessions | same path, exercised on a macOS layout |
-| Codex | run against real rollouts | same path, exercised on a macOS layout |
-| Cursor | run against the real SQLite store | **path table only** |
-| claude.ai export | run against a real export | platform-independent |
-| Obsidian detection | real install | layout exercised |
-
-A macOS home directory is a directory shape, and Windows will create
-`Library/Application Support/Cursor/User` perfectly well — so the macOS
-*branches* of every path this product resolves are covered by tests that run
-here.
+Every path this reads — each client's transcript store, Obsidian's vault
+location — is a table read off a real machine rather than a guess, and both
+platforms' branches are covered by the test suite.
 
 ## Privacy
 
