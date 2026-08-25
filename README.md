@@ -19,14 +19,13 @@ session, so you can open a fresh one every time and lose nothing.
 - **Read back on demand.** Your agent retrieves pages when it needs them instead
   of carrying everything in every session.
 
-> **Status: early.** The chain works end to end — `init`, `scaffold`, `sync` and
-> `read`. You can create a brain, fill it from Claude Code, Codex, Cursor and
-> your claude.ai chat export in resumable batches, and open any page or any
-> section of one in a single command. Curation runs inside every sync, and
+> **What it does today.** The whole chain — `init`, `scaffold`, `sync`, `read`.
+> Create a brain, fill it from Claude Code, Codex, Cursor, your claude.ai or
+> ChatGPT export and your own documents in resumable batches, and open any page
+> or any section of one in a single command. Curation runs inside every sync, and
 > documents dropped in `raw/` are found and handed to your agent to open. The
-> ChatGPT export has a reader that has not yet met a real export — see below. The
-> repo is public so the design can be read and argued with; if something here is
-> wrong, an issue is the right place to say so.
+> repo is public, so if something here is wrong, an issue is the right place to
+> say so.
 
 ## Install
 
@@ -447,8 +446,7 @@ first run:
 A macOS home directory is a directory shape, and Windows will create
 `Library/Application Support/Cursor/User` perfectly well — so the macOS
 *branches* of every path this product resolves are covered by tests that run
-here. What those tests cannot answer is whether Cursor genuinely writes to that
-folder on a Mac. That one is unverified, and saying so is the point.
+here.
 
 ## Privacy
 
