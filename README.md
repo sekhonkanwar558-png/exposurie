@@ -24,13 +24,11 @@ session, so you can open a fresh one every time and lose nothing.
 > your claude.ai chat export in resumable batches, and open any page or any
 > section of one in a single command. Curation runs inside every sync, and
 > documents dropped in `raw/` are found and handed to your agent to open. The
-> ChatGPT export has a reader that has not yet met a real export — see below. Nothing is published to npm. This repo is
-> public so the design can be read and argued with while it is still cheap to
-> change.
+> ChatGPT export has a reader that has not yet met a real export — see below. The
+> repo is public so the design can be read and argued with; if something here is
+> wrong, an issue is the right place to say so.
 
 ## Install
-
-Not yet published. When it is:
 
 ```bash
 npx @sekhon/exposurie init
@@ -39,6 +37,25 @@ npx @sekhon/exposurie init
 Requirements: **a coding agent.** That is the whole list — Node arrives with
 Claude Code. Obsidian and your chat export are steps the tool walks your agent
 through, not things you need to arrive with.
+
+## The commands
+
+| command | what it does |
+|---|---|
+| `init` | reports what is on this machine, and what to do about it |
+| `scaffold` | creates the brain and copies in the files that become yours |
+| `sync` | stages what is new, so your agent can fold it into the brain |
+| `read` | opens a page, one section of it, or finds which page holds a thing |
+| `decline` | records that you said no to a pending step, so it stops asking |
+| `uninstall` | removes everything exposurie put on this machine, keeping your brain |
+
+The first five are typed by **your agent**. `uninstall` is **yours** — see
+[Leaving](#leaving). Every command prints the exact next command to run, and
+`exposurie help` prints the whole list with its flags.
+
+**Exit 0 means done. Exit 10 means a step needs a person — it does not mean
+anything failed.** Agents: the full output spec is
+[`docs/output-contract.md`](docs/output-contract.md).
 
 ## The unusual part: this CLI talks to your agent, not to you
 
@@ -472,7 +489,11 @@ left off — what has been synced is recorded inside the brain, not in the tool.
 
 ## Development
 
+Source: **[github.com/sekhonlabs/exposurie](https://github.com/sekhonlabs/exposurie)**
+
 ```bash
+git clone https://github.com/sekhonlabs/exposurie.git
+cd exposurie
 npm test
 ```
 
