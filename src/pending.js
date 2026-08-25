@@ -30,6 +30,7 @@ import {
   unlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { KEEP_YEARS_DAYS } from './context.js';
 
 /**
  * The catalog. Every human step in the product is declared here and nowhere
@@ -143,8 +144,14 @@ export const STEPS = {
       'after 30 days, so anything older than that is already gone. I can change ' +
       'one setting to keep them for ten years instead — want me to?',
     onYes: (ctx) => [
+      'ONLY IF THEY SAID YES. Ask first, in the conversation, and wait for a',
+      'real answer — this edits a file belonging to software we do not own, on',
+      'their machine, and silence is not consent. If they said no, or did not',
+      'answer, record it instead:',
+      `    exposurie decline claude-code-retention --because "<their words>"`,
+      '',
       `Edit ${ctx.settings || '~/.claude/settings.json'} and set:`,
-      '    "cleanupPeriodDays": 3650',
+      `    "cleanupPeriodDays": ${KEEP_YEARS_DAYS}`,
       '',
       'Keep every other key exactly as it is, and keep the file valid JSON —',
       'if it will not parse, Claude Code stops reading its own settings. Create',

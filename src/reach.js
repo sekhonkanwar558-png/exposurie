@@ -116,8 +116,9 @@ export function contextFiles(home = homedir()) {
 
     // Cursor reads a RULES DIRECTORY, so we write our own file into it instead
     // of appending to a file of theirs. Nothing of the user's is in it, so
-    // removal deletes it outright and there is no merge to get wrong.
-    m('cursor', 'Cursor', join(home, '.cursor'), join(home, '.cursor', 'rules', 'exposurie.mdc'), false, true),
+    // removal empties it and the empty-file rule deletes it — no flag needed,
+    // and the same rule covers a file we created for any other client too.
+    m('cursor', 'Cursor', join(home, '.cursor'), join(home, '.cursor', 'rules', 'exposurie.mdc')),
 
   ];
 }
@@ -131,11 +132,11 @@ export function contextFiles(home = homedir()) {
  * markdown. A guessed path that lands on a .json or .toml a client parses could
  * break that client; a guessed .md path is, at worst, a file nothing reads.
  */
-function m(id, name, root, file, verified = false, owned = false) {
+function m(id, name, root, file, verified = false) {
   if (!/\.(md|mdc)$/.test(file)) {
     throw new Error(`reach: ${id} target must be markdown, got ${file}`);
   }
-  return { id, name, root, file, verified, owned };
+  return { id, name, root, file, verified };
 }
 
 /** %APPDATA%, honouring the env var when it is set since it can be redirected. */
@@ -185,18 +186,41 @@ export function inject(path, text = POINTER) {
  * for "we own the failure path" to mean anything - a pointer we cannot remove
  * is a pointer we have imposed.
  */
-export function remove(path, { owned = false } = {}) {
+export function remove(path) {
   if (!existsSync(path)) return { action: 'absent' };
   const before = readFileSync(path, 'utf8');
   const s = before.indexOf(START);
   const e = before.indexOf(END);
   if (s === -1 || e === -1 || e < s) return { action: 'absent' };
 
-  const after = (before.slice(0, s) + before.slice(e + END.length)).replace(/\n{3,}/g, '\n\n');
-  // A file that only ever held our block is ours to delete. Leaving an empty
-  // file behind in someone's rules directory is litter, and a client that scans
-  // that directory would go on loading nothing forever.
-  if (owned && after.trim() === '') {
+  const tail = before.slice(e + END.length);
+  let after = (before.slice(0, s) + tail).replace(/\n{3,}/g, '\n\n');
+
+  // The blank line above our block was ours too — inject() put it there when it
+  // appended. Removing the block and leaving the separator hands back a file one
+  // byte different from the one we were given, which is not what "exactly as
+  // found" means. Only when our block ran to the end of the file: anywhere else
+  // the tail is the user's and is not ours to tidy.
+  //
+  // ONE DEVIATION, named rather than hidden: the END of the file is normalised
+  // to a single newline. inject() trims trailing whitespace before appending,
+  // so whether the file ended with none, one, or three is already gone by the
+  // time we are here and no amount of care recovers it. Content is never
+  // touched — only the run of whitespace at the very end, and a file written by
+  // any editor already ends in exactly one newline. It is stated because
+  // "byte-identical" is a promise, and a promise with a silent exception is the
+  // failure this codebase keeps finding in itself.
+  if (tail.trim() === '') after = after.replace(/\s*$/, after.trim() === '' ? '' : '\n');
+
+  // A file with nothing left in it is ours to delete, whether we created it
+  // outright or emptied it — nothing of the user's can be inside an empty file,
+  // and the husk is litter a client would go on loading forever.
+  //
+  // This used to require `owned`, which covered Cursor's own rules file and
+  // missed every context file we CREATED because the client had none. On a
+  // machine with no ~/.codex/AGENTS.md, scaffold wrote one and uninstall left a
+  // one-byte husk behind while reporting itself complete.
+  if (after.trim() === '') {
     rmSync(path);
     return { action: 'removed' };
   }
@@ -220,5 +244,5 @@ export function reachAll({ home = homedir(), text = POINTER } = {}) {
 export function unreachAll({ home = homedir() } = {}) {
   return contextFiles(home)
     .filter((c) => existsSync(c.root))
-    .map((c) => ({ ...c, ...remove(c.file, { owned: c.owned }) }));
+    .map((c) => ({ ...c, ...remove(c.file) }));
 }

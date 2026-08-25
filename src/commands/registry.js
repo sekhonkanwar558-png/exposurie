@@ -14,6 +14,7 @@ import { scaffold } from './scaffold.js';
 import { sync } from './sync.js';
 import { read } from './read.js';
 import { decline } from './decline.js';
+import { uninstall } from './uninstall.js';
 import { OK } from '../exit-codes.js';
 import { NAMES } from './names.js';
 
@@ -37,6 +38,10 @@ export const COMMANDS = {
   decline: {
     summary: 'record that your user said no to a pending step, so it stops asking',
     run: (v, pos) => decline(v, pos),
+  },
+  uninstall: {
+    summary: 'remove everything exposurie put on this machine, keeping your brain',
+    run: (v) => uninstall({ at: v.at }),
   },
   help: {
     summary: 'this',
@@ -79,6 +84,12 @@ export function helpText() {
     '',
     '  A large page returns a MAP, not the page — every line of it carries the',
     '  exact command that opens that section. You never have to build one.',
+    '',
+    'LEAVING',
+    '  exposurie uninstall     takes the tool back off this machine. Your brain',
+    '                          stays where it is, in plain Markdown, and nothing',
+    '                          in it needs this tool to be read. Type it yourself;',
+    '                          it does not need an agent.',
     '',
     'NOTHING HERE EVER PROMPTS. Every command runs to completion and exits.',
     'Exit 10 means a step needs a person — it does NOT mean anything failed.',
