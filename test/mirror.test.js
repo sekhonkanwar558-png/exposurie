@@ -145,13 +145,46 @@ test('a declined step loses its reminder through the same path', () => {
   assert.equal(existsSync(pending(vault, 'claude-code-retention')), false);
 });
 
+// ------------------------------------------- the command that matters
+test('sync reaps, because sync is the only command typed repeatedly', () => {
+  // The gap the first fix left, and the one that actually bites. `init` and
+  // `scaffold` are typed ONCE at setup; `sync` is the loop a person lives in.
+  // Mirroring only from the setup commands fixes the bug everywhere except
+  // where a user would ever meet it — the step leaves the output as designed
+  // and the file stays in the brain forever, still promising to delete itself.
+  //
+  // Deliberately exercised WITHOUT calling init or scaffold again, because
+  // that is the whole scenario: setup happened once, and life is `sync`.
+  const { h, vault } = brain();
+  assert.equal(existsSync(pending(vault, 'claude-code-retention')), true);
+
+  doTheStep(h);
+  run(h, ['sync', '--at', vault]);
+
+  assert.equal(
+    existsSync(pending(vault, 'claude-code-retention')),
+    false,
+    'a user who lives in the sync loop never reaps, so the reminder is immortal',
+  );
+  assert.equal(existsSync(pending(vault, 'obsidian')), true, 'sync reaped a step that is still owed');
+});
+
+test('sync reaps a declined step too, on the recurring command', () => {
+  const { h, vault } = brain();
+  run(h, ['decline', 'obsidian', '--because', 'i read markdown in my editor', '--at', vault]);
+  run(h, ['sync', '--at', vault]);
+  assert.equal(existsSync(pending(vault, 'obsidian')), false);
+});
+
 // ------------------------------------------------- the two cannot split
 test('writing and removing are one call, so a caller cannot do half', () => {
   // The structural fix, and the whole point. Calling reap() from each site
   // would leave exactly the gap that produced this bug: a future command wires
   // up record(), forgets the other half, and the reminders start accumulating
   // again with nothing failing.
-  for (const f of ['init.js', 'scaffold.js']) {
+  // sync is in this list for the reason the other two are not enough: it is the
+  // only one of the three a person types more than once.
+  for (const f of ['init.js', 'scaffold.js', 'sync.js']) {
     const src = readFileSync(join(ROOT, 'src', 'commands', f), 'utf8');
     assert.match(src, /mirror\(/, `${f} does not mirror its steps to disk`);
     assert.equal(

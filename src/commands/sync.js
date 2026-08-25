@@ -52,6 +52,7 @@ import { findNewFiles, renderFiles } from '../extract/files.js';
 import { redact } from '../extract/redact.js';
 import { conversationExcluded } from '../extract/exclude.js';
 import { curate, report } from '../curate.js';
+import { unresolved, mirror, stepCtx } from '../pending.js';
 import { readSeam, readState, statePath, vaultState, categoryDirs } from '../vault.js';
 
 const DEFAULT_BATCH_CHARS = 120000;
@@ -732,6 +733,25 @@ export function sync({ done: isDone } = {}) {
     };
   }
   if (!d.vault) return noBrain();
+
+  // Bring the reminder files in line with what is still owed — here, on the ONE
+  // command a person types repeatedly.
+  //
+  // `init` and `scaffold` mirror too, and for a whole release they were the only
+  // ones that did. Both are typed ONCE, at setup. So a user who completed a step
+  // afterwards and then lived in the normal loop never reaped at all: the step
+  // vanished from the output exactly as designed, while the file stayed in their
+  // brain reading "Waiting on you" under a line promising it would delete itself.
+  //
+  // The bug was fixed everywhere except the command where it bites. Found by
+  // reading a transcript rather than by any test, which is why the placement is
+  // the fix and not the call: this is the recurring command, so this is where
+  // "disappears by itself" has to actually happen.
+  //
+  // It costs nothing extra — `detect()` has already run, and it sits before the
+  // dispatch so both the staging and the `--done` path are covered by one call.
+  mirror(d.vault, unresolved(stepCtx(d)));
+
   return isDone ? done(d.vault) : stage(d.vault, d);
 }
 
