@@ -187,8 +187,8 @@ export function init({ at } = {}) {
         'in raw/ are FOUND and handed to you to open; exposurie never parses a ' +
         'document itself, so a PDF becomes a page only because you read it. ' +
         'Documents attached to a claude.ai Project are listed but not fetched. ' +
-        'The ChatGPT reader has never met a real export, so it reports a parse it ' +
-        'cannot do instead of pretending the account is empty. opencode, Gemini ' +
+        'A ChatGPT export that cannot be parsed is reported as a parse failure ' +
+        'by name, never as an empty account. opencode, Gemini ' +
         'CLI, Windsurf and Aider are not read. Do not invent a command for any ' +
         'of that.',
       74,

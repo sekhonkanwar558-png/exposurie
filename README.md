@@ -68,6 +68,12 @@ list written for a model to execute:
 ```
 exposurie  no brain yet
 
+FOR YOUR USER — 1 pending
+  [claude-web-export]  claude.ai chat export
+    WHY: your claude.ai chats live on Anthropic servers, not on this
+    disk, and there is no API for them — only you can request them.
+    ASK YOUR USER / RELAY THESE EXACTLY / DONE WHEN / IF THEY SAY NO...
+
 STATE
   brain        not created  (will go at ~/brain)
   claude-code  125 sessions   (~/.claude)
@@ -86,8 +92,16 @@ DO THESE IN ORDER
       too? It takes about a minute of clicking, then a wait."
       Do NOT wait for an answer. Continue to the next step.
 
+NOT IN THIS VERSION
+  Conversation is read directly — Claude Code, Codex and Cursor on this
+  machine, plus claude.ai and ChatGPT chats from an export. Files dropped
+  in raw/ are FOUND and handed to you to open... Do not invent a command
+  for any of that.
+
 EXIT 10 — there is a step for your user. Nothing has failed.
 ```
+
+*Abridged — the real output spells every step out in full.*
 
 Four consequences fall out of that, and they are the design:
 
