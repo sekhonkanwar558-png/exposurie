@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { detect, tilde, configPath, brokenConfig } from '../context.js';
 import { reachAll } from '../reach.js';
-import { unresolved, record, stepCtx } from '../pending.js';
+import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
 import { version } from '../version.js';
@@ -239,7 +239,9 @@ export function scaffold({ at } = {}) {
   ]);
   // Now that a brain exists, an open step is mirrored to disk as well as
   // printed. Auto mode blows past a terminal; a file is still there tomorrow.
-  for (const p of open) record(target, p);
+  // The same call clears the ones no longer owed — a second scaffold on a
+  // machine where the user has since done a step must not re-litter the brain.
+  mirror(target, open);
 
   // The seam is listed even though writeSeam always runs: it is the one file
   // both sides read, so a person editing folder names needs to know it is there.

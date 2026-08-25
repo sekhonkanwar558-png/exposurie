@@ -6,7 +6,7 @@
 // input, and the human step is never a gate.
 
 import { detect, tilde } from '../context.js';
-import { unresolved, record, stepCtx } from '../pending.js';
+import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
 import { DEFAULT_VAULT, expandPath, vaultState } from '../vault.js';
@@ -162,7 +162,11 @@ export function init({ at } = {}) {
 
   // Mirror to disk only once there is a vault to mirror into; until then the
   // step rides the output, which is the only surface that exists.
-  if (d.vault) for (const p of open) record(d.vault, p);
+  //
+  // Both directions, in one call. Writing the open ones was wired up from the
+  // start and removing the finished ones never was, so a user who did the thing
+  // kept a file telling them to do the thing.
+  mirror(d.vault, open);
 
   // Saying where the build actually stops, rather than naming a command that
   // does not exist yet. An agent handed a plan whose steps fail learns that the

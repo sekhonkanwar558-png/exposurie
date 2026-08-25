@@ -464,17 +464,42 @@ export function record(vault, step) {
   return path;
 }
 
-/** Remove the disk record once detection says the step is done. */
-export function reap(vault, ctx = {}) {
+/**
+ * Make the disk match what is still owed: write the open reminders, remove the
+ * ones that are not.
+ *
+ * The two halves are one call because they spent a whole release apart. record()
+ * was wired into both commands and reap() was wired into neither — so a user who
+ * actually did a step got the step correctly dropped from the output and a file
+ * left in their brain saying "Waiting on you", under a line promising it would
+ * delete itself. Correct component, no caller: the same class as the decline
+ * filter that read a `vault` nobody passed it.
+ *
+ * Nothing here can half-happen now. A caller that mirrors gets both.
+ */
+export function mirror(vault, open = []) {
+  if (!vault) return { written: [], gone: [] };
+  const written = [];
+  for (const p of open) if (record(vault, p)) written.push(p.id);
+  return { written, gone: reap(vault, open) };
+}
+
+/**
+ * Remove the disk record for anything no longer owed.
+ *
+ * It takes the open list rather than recomputing it, so the file on disk and
+ * the step in the output cannot disagree about what "open" means — one
+ * computation, one answer. That covers declines for free: a declined step is
+ * not in `open`, so its reminder goes, and the brain stops contradicting a
+ * decision the user already made.
+ */
+export function reap(vault, open = []) {
   if (!vault || !existsSync(dir(vault))) return [];
-  // The vault rides along so a declined step counts as closed here too —
-  // otherwise the refusal is honoured in the output and contradicted by a
-  // reminder file still sitting in the brain.
-  const open = new Set(unresolved({ ...ctx, vault }).map((s) => s.id));
+  const stillOpen = new Set(open.map((s) => s.id));
   const gone = [];
   for (const f of readdirSync(dir(vault))) {
     const id = f.replace(/\.md$/, '');
-    if (STEPS[id] && !open.has(id)) {
+    if (STEPS[id] && !stillOpen.has(id)) {
       try {
         // Best-effort: a stale reminder is a nuisance, a crash is a bug.
         unlinkSync(join(dir(vault), f));
