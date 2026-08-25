@@ -46,6 +46,12 @@ const COPY = [
   ['index.md', 'index.md', 'the catalog'],
   ['log.md', 'log.md', 'the activity log'],
   ['wiki-prompt.md', join('.exposurie', 'wiki-prompt.md'), 'how pages get written'],
+  ['examples.md', join('.exposurie', 'examples.md'), 'what a good page looks like'],
+  // The one file here the AGENT keeps writing rather than only reading. It
+  // ships nearly empty because its content cannot ship: it is this person's own
+  // corrections, mined from their own corpus, and it is how a schema that is
+  // somebody else's taste becomes theirs without them having to write it.
+  ['how-they-work.md', join('.exposurie', 'how-they-work.md'), 'their taste, learned from their own corrections'],
   ['sync.md', join('.exposurie', 'sync.md'), 'the sync procedure'],
   // The curator's half that needs a reader, and the record of what has already
   // been judged. Both are copied at SCAFFOLD rather than on first use, because
@@ -231,8 +237,9 @@ export function scaffold({ at } = {}) {
       obsidianInstalled: d.obsidianInstalled,
       clients: d.clients,
       chatgptExports: d.chatgptExports,
+      retention: d.retention,
     },
-    ['claude-web-export', 'chatgpt-web-export', 'obsidian'],
+    ['claude-code-retention', 'claude-web-export', 'chatgpt-web-export', 'obsidian'],
   );
   // Now that a brain exists, an open step is mirrored to disk as well as
   // printed. Auto mode blows past a terminal; a file is still there tomorrow.
@@ -283,10 +290,16 @@ export function scaffold({ at } = {}) {
     ...planBlock([
       { read: join(target, 'CLAUDE.md') },
       { read: join(target, '.exposurie', 'wiki-prompt.md') },
+      {
+        read: join(target, '.exposurie', 'examples.md'),
+        note:
+          'Worked examples of a good page and three ways one goes wrong. Rules ' +
+          'produce median pages; this is the part that transfers by example.',
+      },
     ]),
     '',
     ...wrap(
-      'Both of those belong to the user now, not to us. They are meant to be ' +
+      'Those belong to the user now, not to us. They are meant to be ' +
         'edited as the brain finds its shape, and exposurie will never overwrite ' +
         'them.',
       74,
@@ -297,7 +310,7 @@ export function scaffold({ at } = {}) {
   return {
     code: open.length ? HUMAN : OK,
     state: vaultState(target, 'scaffold'),
-    pending: open.map((s) => ({ ...s, ctx: { vault: target } })),
+    pending: open.map((s) => ({ ...s, ctx: { vault: target, settings: d.retention?.path } })),
     body,
     json: {
       brain: target,

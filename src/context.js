@@ -20,6 +20,14 @@ import { cursorRoot, readCursorSessions, countCursorSessions, cursorMtime } from
 import { SIGNATURE as CHATGPT_SIGNATURE } from './extract/chatgpt.js';
 
 const HOME = homedir();
+
+// Claude Code's own default, stated in its binary: "Number of days to retain chat
+// transcripts before automatic cleanup (default: 30)."
+const DEFAULT_RETENTION = 30;
+
+// Long enough that nobody meets this again. Their docs suggest 3650 for ~10
+// years, so this is their number rather than one we invented.
+export const KEEP_YEARS_DAYS = 3650;
 const SEP = String.fromCharCode(92); // backslash, written this way to survive shell heredocs
 
 /** Recursively collect files matching a predicate. Depth-capped; never throws. */
@@ -264,6 +272,37 @@ export function brokenConfig(state) {
   };
 }
 
+/**
+ * How long this machine keeps its transcripts before deleting them.
+ *
+ * The premise of this tool was that it reads what a person has. It does not:
+ * Claude Code deletes its own transcripts after `cleanupPeriodDays`, default
+ * 30, and everything older is gone before exposurie is ever installed. Measured
+ * on the machine this was built on — 164 transcripts, none older than 29 days,
+ * and sessions the brain had already filed in early July no longer existed.
+ *
+ * Nothing here writes that file. It is machine-parsed and belongs to another
+ * vendor: break it and their setup fails silently, with us the last to touch
+ * it. We read it, and the person's own agent changes it if they say yes.
+ *
+ * Returns days, or `null` when nothing is configured — which means the default
+ * is in force, not that retention is unlimited. Those look identical in the
+ * file and are opposite in effect.
+ */
+export function retentionDays() {
+  const p = join(HOME, '.claude', 'settings.json');
+  if (!existsSync(p)) return { configured: false, days: DEFAULT_RETENTION, path: p };
+  try {
+    const v = JSON.parse(readFileSync(p, 'utf8'))?.cleanupPeriodDays;
+    if (typeof v === 'number' && v > 0) return { configured: true, days: v, path: p };
+  } catch {
+    // Unreadable settings mean we cannot tell, and a guess here would either
+    // nag someone who is already safe or reassure someone who is not.
+    return { configured: false, days: null, path: p };
+  }
+  return { configured: false, days: DEFAULT_RETENTION, path: p };
+}
+
 /** One call, everything a command needs to decide what to print. */
 export function detect() {
   const exports = findExports();
@@ -286,6 +325,7 @@ export function detect() {
     chatgptExports: exports.filter((e) => e.kind === 'chatgpt'),
     brokenExports: exports.filter((e) => e.kind === 'broken'),
     obsidianInstalled: obsidianInstalled(),
+    retention: retentionDays(),
     config,
     configStatus: cfg.status,
     configError: cfg.status === 'unreadable' ? cfg : null,

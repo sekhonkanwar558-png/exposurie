@@ -105,14 +105,19 @@ test('every human step ships exact words, not a topic', () => {
     for (const f of ['title', 'why', 'ask', 'doneWhen']) {
       assert.ok(s[f]?.length > 10, `${id}.${f} is missing or too thin to relay`);
     }
-    // `verbatim` may be a function now, because a step that names the user's
-    // own brain folder cannot be a fixed string. Resolve it the way the
-    // renderer does and hold the same bar on what comes out.
+    // Either channel is fine and the bar is identical. `verbatim` is read TO
+    // the user; `onYes` is what the agent does FOR them after a yes. What is
+    // banned is a step that names a topic and leaves the words to be invented —
+    // so a step must carry exactly one of the two, and it must be real lines.
     const said = lines(s, { vault: '/somewhere/brain' });
-    assert.ok(Array.isArray(said) && said.length >= 2, `${id}.verbatim must be real steps`);
+    assert.ok(Array.isArray(said) && said.length >= 2, `${id} must ship real steps, not a topic`);
     assert.ok(
       said.every((l) => typeof l === 'string'),
-      `${id}.verbatim must be lines an agent can relay`,
+      `${id} steps must be literal lines`,
+    );
+    assert.ok(
+      Boolean(s.verbatim) !== Boolean(s.onYes),
+      `${id} must be read out OR done for them, never ambiguously both`,
     );
     assert.equal(typeof s.resolved, 'function', `${id} must be detectable, not self-reported`);
   }

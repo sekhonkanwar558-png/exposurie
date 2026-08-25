@@ -38,6 +38,12 @@ Do this over **the pages this batch touched**, not the whole brain. Scoped, it
 costs almost nothing and runs forever. Unscoped, it becomes a rescue operation
 nobody schedules.
 
+**Read `.exposurie/how-they-work.md` first.** Curation is judgement, and that
+file is the only record of whose judgement it is meant to match. Where it
+disagrees with this procedure, it wins — with two exceptions that hold no matter
+what anyone prefers: never invent a fact, and never delete material because a
+preference makes it inconvenient.
+
 1. **Contradictions.** Two pages that disagree about the same fact. Do not
    silently pick a side: say what was believed, what is now known, and when it
    changed. A contradiction recorded is worth more than a contradiction
@@ -72,6 +78,25 @@ suppression count is printed on every run, so a growing allowlist is visible
 rather than a quiet way of muting the thing.
 
 ## Two rules that are easy to get backwards
+
+## The SHAPE block, when it appears
+
+Everything else the tool reports is about a line. The SHAPE block is about what
+the brain is becoming, and it is the only signal here for the failure that
+otherwise arrives completely silent: a clean graph, a rising page count, and
+nothing anyone wants to open.
+
+It cannot tell you a page is good — nothing can. It can tell you the brain has
+taken the shape of a log: pages that are diaries, page count tracking session
+count, or a graph with no centre.
+
+**Act on it, then tell the person.** They are the only one who can judge whether
+their brain is worth reading — nothing about their brain is ever sent anywhere,
+so if the signal stops with you it stops entirely.
+
+A brain is allowed **one** page that is deliberately a chronology. When that is
+what the finding has caught, retire it the same way as any other, with the key
+the block prints.
 
 **Size is a prompt to look, not a verdict.** There is no line limit here and
 there should not be one. What matters is whether every point of the brain can

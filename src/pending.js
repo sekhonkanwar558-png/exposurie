@@ -86,6 +86,66 @@ function openTheBrain(ctx = {}) {
 }
 
 export const STEPS = {
+  /**
+   * The step that is not about getting more material — it is about not losing
+   * the material they already have.
+   *
+   * Claude Code deletes its own transcripts after `cleanupPeriodDays`, default
+   * 30. This was found by trying to read three project folders that turned out
+   * to hold no transcripts at all, on a machine where the oldest surviving file
+   * was 29 days old and sessions filed six weeks earlier had simply gone.
+   *
+   * So "exposurie reads everything you have" was never true for the local half,
+   * and the honest version is a better pitch: without this, a third of a year
+   * of someone's thinking is deleted on a rolling basis by a cleanup they have
+   * never heard of.
+   *
+   * WHY THE AGENT DOES IT AND WE DO NOT: `settings.json` is machine-parsed and
+   * belongs to another vendor. Corrupt it and their tool breaks silently with
+   * us the last to touch it — the same reasoning that kept us out of MCP client
+   * config. Their own agent editing one key of their own settings, after they
+   * say yes, is a different act with a different owner.
+   *
+   * AND WHY IT ASKS AT ALL, given that we normally decide: this changes how
+   * software we do not own behaves on their disk. Deciding for the user is
+   * right when the decision is about OUR tool. It is never right here.
+   */
+  'claude-code-retention': {
+    id: 'claude-code-retention',
+    title: 'Claude Code is deleting your history every 30 days',
+    why:
+      'Claude Code removes its own transcripts after 30 days by default. That ' +
+      'happens whether or not exposurie is installed, and everything older is ' +
+      'already gone. One line in their settings keeps them instead — after ' +
+      'that, this brain stops depending on another tool\'s cleanup schedule.',
+    ask:
+      'Quick thing worth knowing: Claude Code deletes your session transcripts ' +
+      'after 30 days, so anything older than that is already gone. I can change ' +
+      'one setting to keep them for ten years instead — want me to?',
+    onYes: (ctx) => [
+      `Edit ${ctx.settings || '~/.claude/settings.json'} and set:`,
+      '    "cleanupPeriodDays": 3650',
+      '',
+      'Keep every other key exactly as it is, and keep the file valid JSON —',
+      'if it will not parse, Claude Code stops reading its own settings. Create',
+      'the file with just that one key if it does not exist yet.',
+      '',
+      'This changes nothing about how Claude Code runs. It only stops the',
+      'delete. Tell them it is done, and that old transcripts are not coming',
+      'back — this protects what they have from here on.',
+    ],
+    doneWhen: 'cleanupPeriodDays is set to a year or more in that file',
+    resolved: (ctx) => (ctx.retention?.days ?? 0) >= 365,
+
+    /**
+     * Only where the deletion is real. Codex and Cursor keep their history on
+     * their own terms, and a person with no Claude Code on the machine is being
+     * warned about a cleanup that will never run — which is the request that
+     * cannot resolve, reprinting forever.
+     */
+    applies: (ctx) => (ctx.clients || []).some((c) => c.id === 'claude-code' && c.present),
+  },
+
   'claude-web-export': {
     id: 'claude-web-export',
     title: 'claude.ai chat export',
@@ -234,7 +294,12 @@ const dir = (vault) => join(vault, '.exposurie', 'pending');
  * path is a fact we hold.
  */
 export function lines(step, ctx = {}) {
-  return typeof step.verbatim === 'function' ? step.verbatim(ctx) : step.verbatim;
+  const resolve = (v) => (typeof v === 'function' ? v(ctx) : v);
+  // Two channels, one bar. `verbatim` is read TO the person; `onYes` is done
+  // FOR them once they agree. A step has one or the other and both are literal
+  // — the rule was never "there must be a field called verbatim", it is that no
+  // step is ever a topic somebody has to reconstruct.
+  return resolve(step.verbatim) ?? resolve(step.onYes) ?? [];
 }
 
 /**

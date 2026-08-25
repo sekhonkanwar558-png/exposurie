@@ -22,6 +22,48 @@ a log is the one shape that provably cannot answer a question about a person.
 Before creating any page, search `wiki/` for it. **Updating beats creating**,
 every time.
 
+### The same week, written two ways
+
+Three sessions in which someone replaced a dependency. As a log:
+
+    ## 2026-03-04
+    Worked on the API client. Tried Axios, hit an issue with retries.
+
+    ## 2026-03-06
+    Switched to a fetch wrapper. Discussed timeouts.
+
+    ## 2026-03-11
+    Fixed the retry logic, added tests.
+
+Every line is true and the page is worthless. **There is no decision in it.** A
+reader cannot tell that a choice was made, what it was made against, or what it
+cost — so the page can be re-read but never answer anything. As a brain:
+
+    # The API client
+
+    The hand-rolled `fetch` wrapper every service call goes through. Replaced
+    Axios in March 2026 after six days.
+
+    ## Why it is not Axios
+
+    Retries had to be idempotent per-route, and expressing that meant wrapping
+    Axios anyway — so the wrapper existed either way, and a dependency that is
+    entirely wrapped is only costing you.
+
+    **The stated reason at the time was bundle size. That was wrong and worth
+    recording**: the real cost was that the abstraction stopped one layer above
+    where the decisions had to be made.
+
+Same three sessions. One page instead of three, no dates as headings, and the
+part that exists nowhere else — the reason, including the reason that turned
+out to be wrong — is the longest thing on it.
+
+**If your page has dates as headings and a paragraph under each, stop and ask
+what was *concluded*.** That is the page.
+
+Longer worked examples, including a person page and the two other ways pages go
+wrong, are in `.exposurie/examples.md`. Read it once before your first batch.
+
 ## What to look for, in priority order
 
 1. **Motive.** Why something was chosen, and what it was chosen over. This is
@@ -37,6 +79,11 @@ every time.
    concept page, not three bullets.
 6. **Corrections.** When new material contradicts a page, do not silently
    overwrite. Say what was believed, what is now known, and when it changed.
+7. **How they want to be worked with.** Not a page — this one goes in
+   `.exposurie/how-they-work.md`. When the person corrects the agent about
+   *approach* rather than fact — stop hedging, decide instead of asking, you
+   got this wrong last week — that is taste, and it is the only way this brain
+   learns whose brain it is. See that file for what counts and what does not.
 
 ## What to leave out
 
@@ -69,6 +116,9 @@ that into a demo.
 
 ## Working through a batch
 
+**First, read `.exposurie/how-they-work.md`.** It is short, it is about the
+person whose brain this is, and where it disagrees with anything below, it wins.
+
 1. **Read the batch** — newest material first. Recent context is what makes
    older material legible, and stopping early then leaves a useful brain rather
    than an ancient one.
@@ -81,6 +131,10 @@ that into a demo.
    than the staleness.
 5. **Stop cleanly.** If the batch is large, finishing a page and leaving the
    rest is fine — the extractor is resumable and records where it stopped.
+6. **Add anything you learned about how they work** to
+   `.exposurie/how-they-work.md`. Most batches add nothing, and that is the
+   normal result — record a rule when it is stated plainly or when it repeats,
+   never from one offhand line.
 
 ## Voice
 

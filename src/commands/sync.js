@@ -587,6 +587,12 @@ function stage(vault, d) {
               },
             ]
           : []),
+        {
+          read: join(vault, '.exposurie', 'how-they-work.md'),
+          note:
+            'Their taste, in their own words, collected from their own corrections. ' +
+            'Read it before the prompt: where the two disagree, this one wins.',
+        },
         { read: join(vault, '.exposurie', 'wiki-prompt.md') },
         {
           write: 'Fold this batch into the brain, following the prompt above. Update ' +
@@ -693,6 +699,7 @@ function done(vault) {
       ...c.body,
       '',
       ...planBlock([
+        { read: join(vault, '.exposurie', 'how-they-work.md') },
         { read: join(vault, '.exposurie', 'curate.md') },
         {
           write:
@@ -700,7 +707,9 @@ function done(vault) {
             'that disagree, a claim a newer session superseded, an idea now named on ' +
             'several pages that deserves its own. Scope it to the pages this batch ' +
             'touched — that keeps it cheap and continuous rather than a rescue ' +
-            'operation later.',
+            'operation later. If this batch showed you something about how they ' +
+            'want to be worked with, add it to how-they-work.md; most batches ' +
+            'show nothing and that is the normal result.',
         },
       ]),
       ...(next.unfiled > 0

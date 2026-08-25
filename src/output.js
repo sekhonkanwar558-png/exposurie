@@ -164,6 +164,15 @@ export function pendingBlock(pending) {
       out.push(`${INDENT}  RELAY THESE EXACTLY — do not paraphrase, do not summarise:`);
       for (const line of said) out.push(`${INDENT}      ${line}`);
     }
+    // Some steps need a decision from the person but not their hands. Keeping
+    // that separate from `verbatim` matters: `verbatim` is read TO them, and an
+    // agent that relays its own instructions has turned a thing it could have
+    // done in one edit into homework.
+    const mine = typeof p.onYes === 'function' ? p.onYes(p.ctx || {}) : p.onYes;
+    if (mine?.length) {
+      out.push(`${INDENT}  IF THEY SAY YES, DO IT YOURSELF — do not read this out:`);
+      for (const line of mine) out.push(`${INDENT}      ${line}`);
+    }
     if (p.doneWhen) out.push(`${INDENT}  DONE WHEN: ${p.doneWhen}`);
     out.push(`${INDENT}  This does NOT block anything. Keep working.`);
   }

@@ -83,8 +83,8 @@ export function init({ at } = {}) {
   }
 
   // Detection decides what is still owed, so a step cannot be falsely closed.
-  const ctx = { exports: d.exports, obsidianInstalled: d.obsidianInstalled, clients: d.clients, chatgptExports: d.chatgptExports };
-  const open = unresolved(ctx, ['claude-web-export', 'chatgpt-web-export', 'obsidian']);
+  const ctx = { exports: d.exports, obsidianInstalled: d.obsidianInstalled, clients: d.clients, chatgptExports: d.chatgptExports, retention: d.retention };
+  const open = unresolved(ctx, ['claude-code-retention', 'claude-web-export', 'chatgpt-web-export', 'obsidian']);
 
   // Counted, not just detected. "1 export found" and "93 conversations, ready"
   // are the same fact, and only one of them tells a person their own life is
@@ -195,7 +195,7 @@ export function init({ at } = {}) {
   return {
     code: open.length ? HUMAN : OK,
     state: vaultState(d.vault, 'init'),
-    pending: open.map((s) => ({ ...s, ctx: { vault: d.vault } })),
+    pending: open.map((s) => ({ ...s, ctx: { vault: d.vault, settings: d.retention?.path } })),
     body: [
       ...block('STATE', rows),
       ...(steps.length ? ['', ...planBlock(steps)] : []),

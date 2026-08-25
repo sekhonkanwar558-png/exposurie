@@ -109,12 +109,21 @@ to two places with two owners:
 | the extractor | the sync procedure |
 | the curator's checks, and its two safe fixes | **the wiki-building prompt** |
 | the pointer that tells your agent this exists | the curation procedure, and the findings you have retired |
-| the config reader | page templates, exclude list, every page you have |
+| the config reader | page templates, worked examples, exclude list, every page you have |
 
 The wiki-building prompt is the closest thing here to secret sauce, and it is
 deliberately yours — a researcher's brain and a founder's brain want different
 page types, and locking the one file that most needs to change is the wrong
 trade. It ships as a starting point, not a fixture.
+
+It does not ship alone. Rules produce median pages, so `.exposurie/examples.md`
+carries the thing itself — a worked page, a person page, and the three ways a
+page goes wrong — because the difference between a brain and an archive is
+taste, and taste transfers by example far better than by instruction.
+
+**And there is a third category, which is neither ours nor copied:**
+`.exposurie/how-they-work.md` is written *by your agent, about you*. Ships
+nearly empty, because its content cannot ship. See below.
 
 **"Yours" is enforced, not promised.** `scaffold` never overwrites a file that
 exists. Run it again and it tops up what is missing and prints what it left
@@ -298,6 +307,77 @@ reason to trust it:
 Anything shaped like an API key is removed on the way in, and the count is
 reported — a silent redaction is indistinguishable from a bug that ate a
 paragraph.
+
+## Your coding agent is deleting your history right now
+
+Claude Code removes its own transcripts after **30 days** by default
+(`cleanupPeriodDays`). That happens whether or not you install this, and it is
+not a small amount: measured on the machine exposurie was built on, 164
+transcripts existed and **not one was older than 29 days** — sessions from six
+weeks earlier were simply gone.
+
+So the honest version of what this tool does is not "it reads your whole
+history." It is: **it is the only thing standing between your history and a
+rolling deletion.**
+
+The first run captures whatever still exists. To stop losing the rest, exposurie
+asks — through your agent — whether it may set one key in your Claude Code
+settings:
+
+    "cleanupPeriodDays": 3650
+
+Ten years instead of thirty days. exposurie does **not** write that file itself.
+It is machine-parsed and belongs to another tool: corrupt it and Claude Code
+stops reading its own settings, with us the last to have touched it. Your agent
+makes the edit, after you say yes, and tells you it did.
+
+It is asked rather than assumed because it changes how software we do not own
+behaves on your disk. That is the one class of decision this tool will not make
+for you.
+
+## Nothing is sent anywhere, so the brain watches itself
+
+exposurie has no telemetry, no endpoint, and no network code. Not "off by
+default" — there is nothing in the package that could phone home, which is the
+only version of that claim you can verify in one grep.
+
+That leaves a real problem: if a brain turns into a pile of session logs, we
+never find out. So the check runs where the brain is, and reports to the only
+party who can judge it.
+
+Every sync, the curator asks whether the brain has taken the **shape** of a log —
+pages written as diaries, page count tracking session count, a graph with no
+centre. It cannot tell you a page is good; nothing can. It can catch the failure
+that otherwise arrives silent, and hand it to your agent to fix and tell you
+about.
+
+It never fixes those itself, and it is calibrated to be quiet: measured against a
+carefully built 67-page brain, it reports one page — a timeline that is meant to
+be a timeline — and that one is retirable.
+
+## How the brain learns whose brain it is
+
+A shipped prompt is somebody else's taste. It can say what is generally worth
+recording; it cannot know what *you* consider signal, how you want to be written
+to, or which of its defaults you would throw out.
+
+Normally a brain learns that slowly — you read a bad page and say so. That takes
+months and most people never do it.
+
+**But you have been correcting an agent all along.** Stop hedging. Just pick one.
+You got this wrong last week. Those corrections are taste, and they are already
+in the transcripts this brain is built from. So the agent collects them into
+`.exposurie/how-they-work.md` as it reads, and reads that file back before
+writing pages and before curating — where it disagrees with the shipped prompt,
+**your file wins.**
+
+Two things it cannot overrule, because they are what make a brain trustworthy
+rather than agreeable: it never invents a fact to satisfy a preference, and it
+never deletes material because a preference makes it inconvenient.
+
+A factual correction is not taste. "Wrong file", "that was renamed" — those are
+facts, and they belong in the pages. The test is whether it would change how
+*any* page is written.
 
 ## One command, and curation rides inside it
 

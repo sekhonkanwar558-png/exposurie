@@ -46,7 +46,8 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname, basename, extname, relative } from 'node:path';
 
 import { allPages, headings, findSection, sectionCmd, nthFor } from './read.js';
-import { categoryDirs, seamDefaults } from './vault.js';
+import { categoryDirs, seamDefaults, readState } from './vault.js';
+import { shapeOf } from './shape.js';
 import { block, wrap } from './output.js';
 
 export const ALLOW_FILE = 'curate-allow.txt';
@@ -596,6 +597,14 @@ function analyse(vault, s) {
       return false;
     });
 
+  // The shape pass. Separate from every finding above on purpose: those ask
+  // whether the graph is consistent, and a perfectly consistent graph can be a
+  // pile of session logs. This asks whether the brain became the thing the
+  // whole product exists to prevent, and it reports to the person rather than
+  // fixing anything.
+  const filed = Object.keys((readState(vault) || {}).files || {}).length;
+  const form = shapeOf({ pages, inbound, filed, allow: new Set(readAllow(vault)) });
+
   return {
     pages: pages.length,
     links: totalLinks,
@@ -604,6 +613,7 @@ function analyse(vault, s) {
     heavy,
     suppressed,
     byTitle,
+    shape: form,
   };
 }
 
@@ -721,7 +731,7 @@ function applyFixes(byTitle, broken, notice) {
 
 /** The curator's report, as body lines. Empty when there is genuinely nothing. */
 export function report(result, vault) {
-  const { pages, links, broken, notice, heavy = [], fixed, suppressed } = result;
+  const { pages, links, broken, notice, heavy = [], fixed, suppressed, shape } = result;
   const total = broken.length + notice.length;
 
   const head = [['brain', `${pages} page${pages === 1 ? '' : 's'} · ${links} links`]];
@@ -766,6 +776,36 @@ export function report(result, vault) {
   };
   section('BROKEN — the graph or the index is wrong', broken);
   section('NOTICE — nothing is broken; the brain is drifting off its peak', notice);
+
+  // Deliberately its own block, below the findings and phrased at the agent.
+  // A finding says a line is wrong. This says the brain is turning into the
+  // thing it was built not to be — different problem, different reader, and the
+  // only party who can act on it is the one whose brain it is.
+  const signals = shape?.signals ?? [];
+  if (signals.length) {
+    out.push('', 'SHAPE — not about a line; about what the brain is becoming');
+    for (const sg of signals) {
+      out.push(`  [${sg.kind}]  ${sg.what}`);
+      out.push(...wrap(sg.tell, 68, '      '));
+      // A brain is allowed a page that is deliberately a chronology. Say how to
+      // retire it here, or this reports a correct page forever and gets muted.
+      if (sg.retire) {
+        out.push(`      IF THAT PAGE IS MEANT TO BE A CHRONOLOGY, retire it:`);
+        out.push(`      APPEND TO ${join(vault, '.exposurie', ALLOW_FILE)}`);
+        out.push(`      ${sg.retire}`);
+      }
+    }
+    out.push(
+      ...wrap(
+        'None of this is auto-fixable and none of it is a rule — a young brain trips ' +
+          'these honestly. They are the shape of the one failure that otherwise arrives ' +
+          'silent: a clean graph, a rising page count, and nothing worth opening. ' +
+          'TELL YOUR USER what you found and what you changed.',
+        74,
+        '  ',
+      ),
+    );
+  }
 
   if (total > 0) {
     const first = broken[0] || notice[0];
