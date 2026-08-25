@@ -485,8 +485,16 @@ after. If you want them gone, delete the folder yourself. A tool that can erase
 the thing it spent months building for you is not one you should have trusted
 with it.
 
-If you installed globally rather than using `npx`, the last line is
-`npm uninstall -g @sekhon/exposurie`.
+**`npx` never leaves the tool on your machine** — it fetches the package,
+runs it, and that is the end of it. Nothing to clean up.
+
+If you instead installed it permanently with `npm install -g @sekhon/exposurie`,
+that copy is still on your machine after the pointer is gone. One more line
+removes it:
+
+```bash
+npm uninstall -g @sekhon/exposurie
+```
 
 Changed your mind later? Run `scaffold` again and it picks up exactly where you
 left off — what has been synced is recorded inside the brain, not in the tool.

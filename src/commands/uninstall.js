@@ -91,8 +91,9 @@ export function uninstall({ at } = {}) {
     '',
     'THE PACKAGE',
     ...wrap(
-      `Run with npx, nothing was ever installed and there is nothing left. If ` +
-        `you installed it globally, this is the last line:`,
+      `Run with npx, nothing was ever installed and there is nothing left to ` +
+        `remove. If you installed it globally instead, that copy is still here ` +
+        `and one more line removes it:`,
       74,
       '  ',
     ),
