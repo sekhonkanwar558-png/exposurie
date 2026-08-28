@@ -30,12 +30,25 @@ session, so you can open a fresh one every time and lose nothing.
 ## Install
 
 ```bash
-npx @sekhon/exposurie init
+npm install -g @sekhon/exposurie
+exposurie init
 ```
 
 Requirements: **a coding agent.** That is the whole list — Node arrives with
 Claude Code. Obsidian and your chat export are steps the tool walks your agent
 through, not things you need to arrive with.
+
+**Install it, do not `npx` it — and that is a real requirement, not a
+preference.** Your brain is reached from every project through a one-line
+pointer that exposurie writes into your agent's global instructions, and that
+pointer names a command. `npx` leaves no command behind: the package lands in a
+temporary cache and is gone when the run ends. Retrieval is the whole product,
+so a pointer naming a command that does not exist is the tool not working, and
+it fails silently — nothing errors, the line simply never gets run.
+
+`npx @sekhon/exposurie init` still works and still does the right thing; it
+writes a slower, self-contained `npx -y` pointer instead of a dead one, tells
+you it did, and shortens it on the next `sync` once you install properly.
 
 ## The commands
 
@@ -256,13 +269,19 @@ count looks right, and a reader treating them as "nothing said" would mark four
 months of someone's life as read and never look again. They are reported and
 left unread instead, so a fuller export picks them up.
 
-**ChatGPT is different, and the README should say so.** Every other reader here
-was written against a real file. That one was not — there was no ChatGPT export
-on the machine it was built on. So its safety is not confidence in the parse: an
-archive that holds conversations and yields no words from any of them is
-reported as **a bug in exposurie**, by name, rather than as an empty account. If
-the shape is wrong, the first person to run it finds out, instead of getting a
-brain that quietly contains nobody.
+**ChatGPT was different, and half of it still is.** Every other reader here was
+written against a real file; that one was written against OpenAI's documented
+shape, because there was no ChatGPT export on the machine it was built on. So
+its safety was never confidence in the parse: an archive that holds
+conversations and yields no words from any of them is reported as **a bug in
+exposurie**, by name, rather than as an empty account.
+
+The parse is now proven — a real 1,164-conversation export returned 1,157
+readable and 7 genuinely empty, with no parse error. **Finding** that export is
+the part that is not. OpenAI delivered it already unpacked into a dated folder,
+split across `conversations-000.json` through `conversations-011.json`, and it
+had to be repackaged by hand before anything here could see it. The reader
+works; nothing was reaching it. That is a live defect, not a caveat.
 
 ## Cursor keeps its chats in SQLite, so we read SQLite
 
@@ -345,10 +364,13 @@ looks like it is working the entire time.
 Three more things sync does because a first run happens before anyone has a
 reason to trust it:
 
-- **Whole sessions, newest first, up to a size budget.** History is never
-  truncated — it is *ordered*, and what did not fit is reported and comes next.
-  A year of history is a series of ordinary batches, not one enormous job
-  against your own plan quota at minute one.
+- **Whole sessions, newest first, up to a size budget — and it loops until the
+  backlog is empty.** The budget sizes a batch to your *agent's context*, not to
+  your history: nothing is truncated, it is *ordered*, and what did not fit is
+  reported and comes next. Every batch hands back the command for the following
+  one as a numbered step, and says not to stop and ask. The first sync reads all
+  of it, which is the point of installing this — depth is the product, so the
+  cost is disclosed rather than avoided.
 - **Exclusion is a gate, not a cleanup.** Anything on your exclude list is never
   opened past the few KB needed to see which folder it belongs to. Filtering
   after the read is an apology, not a control.
@@ -495,7 +517,7 @@ conversation you have ever had with an AI is public — so it stays yours to mak
 One command, and you can type it yourself — no agent involved:
 
 ```bash
-npx @sekhon/exposurie uninstall
+exposurie uninstall
 ```
 
 It removes the pointer from every client it was written into. Your own
@@ -510,16 +532,16 @@ after. If you want them gone, delete the folder yourself. A tool that can erase
 the thing it spent months building for you is not one you should have trusted
 with it.
 
-**`npx` never leaves the tool on your machine** — it fetches the package,
-runs it, and that is the end of it. Nothing to clean up.
-
-If you instead installed it permanently with `npm install -g @sekhon/exposurie`,
-that copy is still on your machine after the pointer is gone. One more line
-removes it:
+The package itself is still on your machine after the pointer is gone. One more
+line removes it, and `uninstall` prints this only when there is actually
+something there to remove:
 
 ```bash
 npm uninstall -g @sekhon/exposurie
 ```
+
+(If you ran the whole thing through `npx`, nothing was ever installed and there
+is nothing to clean up. `uninstall` says which of the two you are.)
 
 Changed your mind later? Run `scaffold` again and it picks up exactly where you
 left off — what has been synced is recorded inside the brain, not in the tool.

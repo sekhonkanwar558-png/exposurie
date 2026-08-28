@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, appendFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, appendFileSync, existsSync, readdirSync, utimesSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,23 @@ function transcript(h, project, name, lines) {
   mkdirSync(dir, { recursive: true });
   const p = join(dir, `${name}.jsonl`);
   writeFileSync(p, lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
+  return settled(p);
+}
+
+/**
+ * Backdate a fixture's mtime so it models a conversation that has ENDED.
+ *
+ * sync defers anything still being written — the session running the command,
+ * the subagents it spawned, a half-flushed transcript — because reading half a
+ * conversation loses the half that explains why. A fixture written and synced
+ * in the same millisecond is, correctly, one of those.
+ *
+ * So this is not a workaround for the gate. It is what makes the fixture mean
+ * what the test says it means: a conversation somebody already finished.
+ */
+function settled(p) {
+  const past = new Date(Date.now() - 3600 * 1000);
+  utimesSync(p, past, past);
   return p;
 }
 
@@ -146,6 +163,7 @@ test('an excluded conversation is never loaded, not merely dropped later', () =>
       .map((l) => JSON.stringify(l)).join('\n') + '\n',
     'utf8',
   );
+  settled(p);
 
   const r = run(h, ['sync']);
   const out = staged(h);
@@ -216,6 +234,10 @@ test('a session that continues is re-read from where it stopped, not from the to
   run(h, ['sync', '--done']);
 
   appendFileSync(p, JSON.stringify(user('SECOND-ROUND')) + '\n' + JSON.stringify(agent('ok again')) + '\n', 'utf8');
+  // The person came back later and the conversation ENDED again. Without this
+  // the append leaves the transcript looking live, and sync correctly holds it
+  // — which is the right behaviour and the wrong fixture.
+  settled(p);
   run(h, ['sync']);
 
   const out = staged(h);

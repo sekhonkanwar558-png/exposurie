@@ -54,6 +54,56 @@ import { KEEP_YEARS_DAYS } from './context.js';
  * product that talks directly to a person.
  */
 /**
+ * Is this client actually where the person works, or did they just try it once?
+ *
+ * THE FAILURE THIS EXISTS FOR, measured on a real machine. `init` correctly
+ * detected 6 Claude Code sessions, 165 Codex and 11 Cursor — and then asked for
+ * a claude.ai export, offered to change Claude Code's retention, and NEVER
+ * asked for the ChatGPT export holding 1,164 conversations. Nothing was
+ * mis-detected. The counts were right there and every gate below read them as a
+ * boolean: `present`. Six stale transcripts, 3% of the corpus, outvoted 165.
+ *
+ * That is not a detection bug, it is a RANKING bug, and it is the one this
+ * product keeps rediscovering — the wrong answer wearing the shape of a right
+ * one. So presence stops being the question and share becomes it.
+ *
+ * The two export gates used to be a mutually exclusive pair hinged on Claude
+ * Code being present, which made "asked for the wrong one" and "never asked for
+ * the right one" the SAME bug: a machine with both clients could only ever be
+ * asked for claude.ai. They are independent now, because a person who genuinely
+ * uses both genuinely has both histories, and both asks can be satisfied.
+ *
+ * Fallbacks, in order, each for a case share cannot answer:
+ *   nothing installed  -> everything applies. The web is all they have and we
+ *                         have no way to guess which vendor; guessing wrong
+ *                         silently loses their entire history, which is far
+ *                         worse than one ask they can decline in one command.
+ *   installed, no runs -> presence is the only signal there is, so use it.
+ */
+const usable = (ctx) => (ctx.clients || []).filter((c) => c.present && c.readable);
+
+/**
+ * One fifth. A client holding 20% of somebody's AI conversation is somewhere
+ * they work; 3% is somewhere they looked once. Picked so the machine that
+ * exposed this — 6 against 176 — lands clearly on the right side rather than
+ * near the line, and so an even split asks for both.
+ *
+ * This is ours to decide and never the user's: a threshold in a config file is
+ * a question we declined to answer and billed to a stranger.
+ */
+export const MATERIAL_SHARE = 0.2;
+
+export function material(ctx, id) {
+  const clients = usable(ctx);
+  if (clients.length === 0) return true;
+  const me = clients.find((c) => c.id === id);
+  if (!me) return false;
+  const total = clients.reduce((n, c) => n + (c.count || 0), 0);
+  if (total === 0) return true;
+  return (me.count || 0) / total >= MATERIAL_SHARE;
+}
+
+/**
  * How this person installs an app, on the machine they are actually on.
  *
  * `process.platform` is a fact we already have. Printing the other two
@@ -67,15 +117,27 @@ function installObsidian() {
 }
 
 /**
- * Install it for them, then walk them into their own brain.
+ * Show them the brain, and treat installing an app as the optional part.
  *
- * Installing Obsidian is not the step — SEEING the brain is. A person left at a
- * freshly installed app with no vault open has been handed an empty window and
- * a file picker, which is where most people stop. So the path to their brain is
- * printed literally, because the agent knows it and they should not have to.
+ * Installing Obsidian was never the step — SEEING the brain is. That was
+ * already written here, and the ORDER contradicted it: the first line was
+ * `brew install`, and opening the folder was the consolation prize at the
+ * bottom under "if Obsidian will not install".
+ *
+ * What that produced on a real machine: Homebrew hung on a GitHub metadata
+ * request, the agent killed it, tried an in-app browser, hit a download
+ * security block, and only then opened the folder — while the person waited.
+ * The install was eventually done by hand by somebody else. Every second of
+ * that was spent before the user had seen a single page of their own brain,
+ * and none of it was necessary, because the folder was openable the whole time.
+ *
+ * So the guaranteed win goes first and the fallible step goes second, bounded.
+ * An agent told to install software will keep trying routes until one works —
+ * that is the behaviour we want almost everywhere and it is wrong here, where
+ * the thing being retried is optional and the person is watching.
  */
 function openTheBrain(ctx = {}) {
-  const where = ctx.vault || 'the brain folder';
+  const where = ctx.vault;
   const open =
     process.platform === 'darwin'
       ? `  open "${where}"`
@@ -83,26 +145,47 @@ function openTheBrain(ctx = {}) {
         ? `  explorer "${where}"`
         : `  xdg-open "${where}"`;
 
+  // No brain yet — this step can be shown by `init`, which runs before one
+  // exists. The old fallback substituted the words "the brain folder" into the
+  // path and printed `explorer "the brain folder"`: a quoted placeholder in the
+  // shape of a runnable command, which is the exact failure this whole pass is
+  // about. Say the true thing instead; the scaffold step above supplies the
+  // path, and by the time anyone answers this question it will be real.
+  const first = where
+    ? ['FIRST, and this always works — open their brain for them:', open, '',
+       `That is it on screen: plain Markdown, ${where}. Everything below is`,
+       'optional, and nothing is blocked if it fails.']
+    : ['FIRST, open their brain for them — it always works. The brain does not',
+       'exist yet; the scaffold step creates it, and that folder is the path.',
+       'Opening it is the whole payoff and it cannot fail. Everything below is',
+       'optional.'];
+
   return [
-    'Install it for them first:',
+    ...first,
+    '',
+    'THEN offer the graph view. Obsidian is free and opens the folder as-is:',
     installObsidian(),
     '',
-    'Then walk them through opening their brain. These four steps, in order:',
+    'ONE attempt. If it stalls, asks for a password, or the download is',
+    'blocked, STOP and say so plainly — their brain is already open and',
+    'Obsidian can wait. Do NOT try a second package manager, do NOT route',
+    'around a blocked download, and do NOT leave an installer running while',
+    'they watch. A person three minutes into a progress bar has learned that',
+    'this tool is work.',
+    '',
+    'If it did install, walk them in. These four, in order:',
     '  1. Open Obsidian.',
     '  2. Click "Open folder as vault".',
     '  3. Choose this exact folder:',
-    `       ${where}`,
+    `       ${where || '(the folder the scaffold step creates)'}`,
     '  4. Trust the vault when it asks. Nothing here runs code.',
     '',
     'Then tell them to press Ctrl+G (Cmd+G on a Mac) for the graph view. That',
     'is the picture of their own head, and it is the moment this stops feeling',
     'like a folder of notes.',
     '',
-    'If Obsidian will not install, they can still read everything — it is plain',
-    'Markdown. Open the folder for them:',
-    open,
-    'Only send them to https://obsidian.md as a last resort, and walk them',
-    'through it in conversation. Do NOT make them run a terminal command.',
+    'If they are happy reading Markdown without it, that is a real answer and',
+    'not a failure. Record it with the decline line below so it stops asking.',
   ];
 }
 
@@ -165,12 +248,20 @@ export const STEPS = {
     resolved: (ctx) => (ctx.retention?.days ?? 0) >= 365,
 
     /**
-     * Only where the deletion is real. Codex and Cursor keep their history on
-     * their own terms, and a person with no Claude Code on the machine is being
-     * warned about a cleanup that will never run — which is the request that
-     * cannot resolve, reprinting forever.
+     * Only where the deletion is real, AND only where it would cost something.
+     *
+     * Presence alone was the old gate, and it offered a stranger an edit to
+     * another vendor's settings file to protect 6 sessions out of 182. This
+     * step's value is proportional to what is being deleted: on a machine where
+     * Claude Code is 3% of the corpus there is nearly nothing to lose, and we
+     * are asking to touch a file we do not own to save it.
+     *
+     * Nothing is lost by waiting. `unresolved` runs on EVERY command, so a
+     * person who later moves onto Claude Code crosses the threshold and gets
+     * asked then — which is also the moment the answer actually matters.
      */
-    applies: (ctx) => (ctx.clients || []).some((c) => c.id === 'claude-code' && c.present),
+    applies: (ctx) =>
+      usable(ctx).some((c) => c.id === 'claude-code') && material(ctx, 'claude-code'),
   },
 
   'claude-web-export': {
@@ -202,26 +293,27 @@ export const STEPS = {
     resolved: (ctx) => (ctx.exports?.length ?? 0) > 0,
 
     /**
-     * Ask when there is any reason to think they use Claude, and only then.
+     * Ask when Claude is materially where they work — see material() above.
      *
-     * Present-and-Claude, or no readable client at all — because somebody with
-     * nothing on their machine is very likely a person who only ever used a
-     * browser, and the web is the whole of their history. What is deliberately
-     * excluded is the case in between: a machine with Codex on it and no sign
-     * of Claude anywhere. Those users get a request they can never satisfy.
+     * The old gate was `some client is claude-code`, paired with its exact
+     * negation on the ChatGPT step. That pairing is what made one machine
+     * produce both halves of the bug at once: Claude Code present at 3% won the
+     * claude.ai ask AND suppressed the ChatGPT one. The comment here used to
+     * name the cost as "a Codex user who also uses claude.ai will not be asked
+     * — a missed import." The shipped failure was the mirror of that, and it
+     * was the larger one. Both are gone: the two steps are independent now.
      *
-     * The cost of being wrong here is real and is the smaller one: a Codex user
-     * who also uses claude.ai in a browser will not be asked. That is a missed
-     * import. The other way round is a permanent nag, and a permanent nag
-     * teaches the person that this tool does not notice them.
+     * There is deliberately no "…or an export already exists" clause here, and
+     * that omission is load-bearing rather than an oversight: `resolved` above
+     * already returns true the moment one is on disk, so such a clause could
+     * never change an outcome. An inert condition that reads like a safeguard
+     * is worse than no condition — it is the next thing somebody trusts.
+     *
+     * Finding the export is not this step's job either way. `sync` reads every
+     * export it finds regardless of the client mix, so a Codex user who happens
+     * to have a claude.ai zip gets it folded in without ever being asked.
      */
-    applies: (ctx) => {
-      if ((ctx.exports?.length ?? 0) > 0) return true;
-      const clients = ctx.clients || [];
-      const usable = clients.filter((c) => c.present && c.readable);
-      if (usable.length === 0) return true; // no local history at all: the web is all they have
-      return usable.some((c) => c.id === 'claude-code');
-    },
+    applies: (ctx) => material(ctx, 'claude-code'),
   },
 
   'chatgpt-web-export': {
@@ -259,38 +351,43 @@ export const STEPS = {
     resolved: (ctx) => (ctx.chatgptExports?.length ?? 0) > 0,
 
     /**
-     * The mirror image of the claude.ai rule, and it exists for the same
-     * person: somebody setting up a brain from Codex has an OpenAI account, so
-     * asking them for a claude.ai export is asking for something they may not
-     * have — and asking them for nothing at all leaves their entire web history
-     * out of the brain.
+     * Now genuinely symmetric with the claude.ai rule, and the asymmetry that
+     * used to be here is deleted rather than softened.
      *
-     * Deliberately NOT symmetric in one respect: a machine with no local
-     * history at all does not get this ask. That person is asked for their
-     * claude.ai export instead, because we cannot read a ChatGPT export with
-     * anything like the same confidence yet — see the warning at the top of
-     * extract/chatgpt.js. Asking for the file we parse better is the honest
-     * default while that is true, and this comment is the thing to delete when
-     * it stops being true.
+     * It said: a machine with no local history does not get this ask, because
+     * "we cannot read a ChatGPT export with anything like the same confidence
+     * yet", and it named itself as the thing to delete when that stopped being
+     * true. It has stopped being true. The reader has since been run against a
+     * real 1,164-conversation export and returned 1,157 readable conversations
+     * and 7 empty ones, with no parse error — so the tree walk is evidence now,
+     * not documentation. What is still unproven is export DISCOVERY, not the
+     * parse: that export had to be repackaged by hand before this tool could
+     * find it, which is a separate defect and does not belong in this gate.
+     *
+     * So a person with no local history is asked for both. We have no way to
+     * know which vendor is theirs, and guessing costs them everything they have
+     * while asking costs one command to decline.
+     *
+     * No "…or an export exists" clause, for the reason given on the claude.ai
+     * step: `resolved` covers it, and a condition that cannot change an outcome
+     * is a safeguard nobody can rely on.
      */
-    applies: (ctx) => {
-      if ((ctx.chatgptExports?.length ?? 0) > 0) return true;
-      const usable = (ctx.clients || []).filter((c) => c.present && c.readable);
-      if (usable.length === 0) return false;
-      return !usable.some((c) => c.id === 'claude-code');
-    },
+    applies: (ctx) => material(ctx, 'codex'),
   },
 
   obsidian: {
     id: 'obsidian',
-    title: 'Obsidian (to read the brain by hand)',
+    title: 'Seeing the brain — the folder now, Obsidian for the graph',
     why:
       'Nothing in the system needs Obsidian — the brain is plain Markdown and ' +
-      'your agent reads the files directly. It is here so the user can browse ' +
-      'and see the graph, which is the moment most people start trusting it.',
+      'your agent reads the files directly. Both halves of this are here so the ' +
+      'user actually LOOKS at it, which is the moment most people start ' +
+      'trusting it. Opening the folder does that on its own and cannot fail; ' +
+      'the graph is the better version of the same moment.',
     ask:
-      'Want to see your brain as an actual linked graph? Obsidian is free and ' +
-      'opens the folder as-is — nothing gets converted or locked in.',
+      'Want to look at your brain? I can open the folder right now — it is ' +
+      'plain Markdown, nothing to install. And if you want to see it as a ' +
+      'linked graph, Obsidian is free and opens the folder as-is.',
     // One line, for the machine this is actually running on.
     //
     // This used to print all three package managers and tell the agent to pick.
@@ -298,7 +395,14 @@ export const STEPS = {
     // noise the user has to filter, and an agent handed three options in a
     // pending step is being asked to guess at something `process.platform`
     // already knows. The tool knows the setup, so the tool says the line.
-    verbatim: (ctx) => openTheBrain(ctx),
+    //
+    // `onYes`, not `verbatim`, and the old channel was a category error. Every
+    // line of this is addressed to the AGENT — "install it for them", "walk
+    // them through" — yet it was rendered under "RELAY THESE EXACTLY, do not
+    // paraphrase", which reads as words to say out loud to a person. The
+    // catalog allows exactly one channel per step precisely so this cannot be
+    // fudged; the fix was to pick the right one.
+    onYes: (ctx) => openTheBrain(ctx),
     doneWhen: 'the user says it is installed, or an Obsidian vault config appears',
     resolved: (ctx) => ctx.obsidianInstalled === true,
   },

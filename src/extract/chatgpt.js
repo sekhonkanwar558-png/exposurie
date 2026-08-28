@@ -5,20 +5,28 @@
 // at chatgpt.com, and asking them for a claude.ai export would be asking for an
 // account they may not have.
 //
-// ─── A WARNING THIS FILE HAS TO CARRY ───────────────────────────────────────
+// ─── WHAT IS PROVEN HERE, AND WHAT IS NOT ───────────────────────────────────
 //
-// Every other reader in this product was written against a real file read off a
-// real machine. This one was not: there is no ChatGPT export on the machine it
-// was built on. It is written against the documented shape of the format, which
-// is precisely the situation that produced the Codex bug — a reader that
-// existed, was declared readable, and returned nothing from every file while
-// the session count looked correct.
+// This reader was originally written against the DOCUMENTED shape of the format
+// rather than a real file, because there was no ChatGPT export on the machine it
+// was built on — precisely the situation that produced the Codex bug, where a
+// reader existed, was declared readable, and returned nothing from every file
+// while the session count looked correct. The safety was never confidence in
+// the parse; it was that a failed parse cannot be silent. `readChatGptExport`
+// reports an archive yielding no conversation as UNREADABLE rather than as
+// empty, and the sync prints that.
 //
-// So the safety here is NOT confidence in the parse. It is that a failed parse
-// cannot be silent: `readChatGptExport` reports an archive that yields no
-// conversation as UNREADABLE rather than as empty, and the sync prints that. If
-// the shape below is wrong, the first person to run it sees a named failure and
-// we get a bug report, instead of a brain that quietly contains nobody.
+// THE PARSE IS NOW EVIDENCE. Run on a real export of 1,164 conversations on
+// somebody else's machine (2026-08-26): 1,157 readable, 7 genuinely empty, no
+// parse error. The tree walk below, `current_node` and all, is confirmed
+// against the real thing rather than against OpenAI's docs.
+//
+// DISCOVERY IS NOT, AND IS THE OPEN DEFECT. That export reached this parser
+// only because it was repackaged by hand first. OpenAI delivered it already
+// unpacked into a dated folder, split across `conversations-000.json` through
+// `conversations-011.json` — so context.js found no zip, and would not have
+// recognised one, since sniff() requires a literal `conversations.json` member.
+// Everything below works. Nothing was reaching it.
 //
 // ─── THE FORMAT ─────────────────────────────────────────────────────────────
 //

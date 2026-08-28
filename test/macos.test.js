@@ -18,7 +18,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, utimesSync } from 'node:fs';
+
+/** A fixture that models a conversation which has ENDED — see sync.test.js. */
+function settled(p) {
+  const past = new Date(Date.now() - 3600 * 1000);
+  utimesSync(p, past, past);
+  return p;
+}
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -83,6 +90,7 @@ test('Claude Code and Codex use the same path on both platforms', () => {
     }) + '\n',
     'utf8',
   );
+  settled(join(h, '.claude', 'projects', 'app', 'a.jsonl'));
   mkdirSync(join(h, '.codex', 'sessions', '2026', '08', '25'), { recursive: true });
   writeFileSync(
     join(h, '.codex', 'sessions', '2026', '08', '25', 'rollout-x.jsonl'),
@@ -96,6 +104,7 @@ test('Claude Code and Codex use the same path on both platforms', () => {
     ].join('\n') + '\n',
     'utf8',
   );
+  settled(join(h, '.codex', 'sessions', '2026', '08', '25', 'rollout-x.jsonl'));
 
   run(h, ['scaffold']);
   run(h, ['sync']);

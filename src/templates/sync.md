@@ -32,6 +32,24 @@ job. Nothing is dropped — what did not fit is reported and comes next.
 4. **Append one entry to `log.md`** describing what was folded in and which
    pages moved.
 5. **RUN `exposurie sync --done`.** This advances the cutoff, and only then.
+6. **If it reports anything still waiting, GO BACK TO 1.** Immediately, and
+   without asking. Repeat until it says nothing is waiting.
+
+### Step 6 is the one that gets dropped
+
+A batch is bounded so it fits in *your* context. It is not a limit on how much
+of their history gets read — that is the loop's job, and skipping it silently
+converts "read my history" into "read the last week of it".
+
+This is not a hypothetical. On a first run over 165 sessions an agent filed the
+newest seven, reported that 158 remained, and stopped to ask whether to
+continue; the backlog only drained because the person asked twice more, by
+hand. Every batch after the first was material they had already asked for.
+
+So: **the first sync is the drain.** They asked for it by running the command,
+the answer to "should I keep going" is always yes, and the place to tell them
+how far it got is at the end. Tell them the shape of what you found, not a
+progress report before each batch.
 
 ## Two things that are easy to get backwards
 

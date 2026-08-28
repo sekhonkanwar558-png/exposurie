@@ -13,7 +13,7 @@
 // else to execute. It works the same when an agent runs it, because plain
 // second-person prose is the one register both can read.
 //
-//   npx @sekhon/exposurie uninstall
+//   exposurie uninstall
 //
 // It is the counterpart to `scaffold`, not a new recurring command: setup is
 // typed once and teardown is typed once. What a person types over and over is
@@ -28,6 +28,7 @@
 
 import { OK } from '../exit-codes.js';
 import { unreachAll } from '../reach.js';
+import { installState, UNINSTALL } from '../install.js';
 import { detect, tilde } from '../context.js';
 import { block, wrap } from '../output.js';
 import { vaultState } from '../vault.js';
@@ -87,17 +88,32 @@ export function uninstall({ at } = {}) {
     body.push('  No brain found on this machine — there was nothing to keep.');
   }
 
+  // Say which of the two is actually true on this machine rather than
+  // describing both and leaving the person to work out which one they are. The
+  // old text led with npx as though it were the normal case; it is not, and
+  // guessing wrong here means someone believes they have uninstalled a package
+  // that is still on their PATH.
+  const install = installState();
   body.push(
     '',
     'THE PACKAGE',
-    ...wrap(
-      `Run with npx, nothing was ever installed and there is nothing left to ` +
-        `remove. If you installed it globally instead, that copy is still here ` +
-        `and one more line removes it:`,
-      74,
-      '  ',
-    ),
-    '      npm uninstall -g @sekhon/exposurie',
+    ...(install.permanent
+      ? [
+          ...wrap(
+            `It is installed on this machine, at ${tilde(install.binary)}. Your ` +
+              `brain does not need it and neither does anything above — this is ` +
+              `the last line, and it is yours to run when you want:`,
+            74,
+            '  ',
+          ),
+          `      ${UNINSTALL}`,
+        ]
+      : wrap(
+          `Nothing to remove — this was run from a temporary npx cache, so no ` +
+            `exposurie command was ever installed here.`,
+          74,
+          '  ',
+        )),
     '',
     ...wrap(
       `Changed your mind later? Run scaffold again and it picks up exactly ` +

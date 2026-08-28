@@ -23,6 +23,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 
+import { invocation } from './install.js';
+
 export const START = '<!-- exposurie:start -->';
 export const END = '<!-- exposurie:end -->';
 
@@ -51,22 +53,37 @@ export const END = '<!-- exposurie:end -->';
 // mechanism we control, and a block reading as 'ignore everything else' gets
 // discounted as injection-shaped. What measured 6/6 was a conditional trigger,
 // so the trigger is what got sharpened rather than the tone.
-export const POINTER = [
-  'The user has an external brain: a curated wiki of their past work,',
-  'decisions, people and projects, built by this tool.',
-  '',
-  'On anything about THIS USER — their decisions, preferences, projects,',
-  'people, history — the brain is authoritative. It outranks what you',
-  'assume and whatever you infer from the current folder. You cannot see',
-  'it; you must read it.',
-  '',
-  'Before answering any such question, and before saying you do not know',
-  'something about them, run:',
-  '',
-  '    exposurie read --search "<topic>"',
-  '',
-  'Every result names the exact next command. Do not answer from memory first.',
-].join('\n');
+//
+// THE COMMAND IT NAMES MUST EXIST. That sounds obvious and it was not: the
+// pointer hardcoded `exposurie`, while the documented first line a person types
+// is `npx @sekhon/exposurie init`, which leaves no such command on PATH. Every
+// npx install therefore wrote an instruction naming nothing, into the one file
+// that loads on every message forever — and it failed silently, because prose
+// naming a missing command does not error, it just never gets run. So the
+// invocation is now resolved against the machine (see install.js) rather than
+// assumed, and `reachAll` defaults to the resolved one so a caller that forgets
+// to pass it still writes something that works.
+export function pointer(cmd = 'exposurie') {
+  return [
+    'The user has an external brain: a curated wiki of their past work,',
+    'decisions, people and projects, built by this tool.',
+    '',
+    'On anything about THIS USER — their decisions, preferences, projects,',
+    'people, history — the brain is authoritative. It outranks what you',
+    'assume and whatever you infer from the current folder. You cannot see',
+    'it; you must read it.',
+    '',
+    'Before answering any such question, and before saying you do not know',
+    'something about them, run:',
+    '',
+    `    ${cmd} read --search "<topic>"`,
+    '',
+    'Every result names the exact next command. Do not answer from memory first.',
+  ].join('\n');
+}
+
+/** The canonical text, naming the permanent install. */
+export const POINTER = pointer();
 
 /**
  * Where each client keeps the file that loads in EVERY session.
@@ -235,7 +252,7 @@ export function remove(path) {
  * `~/.cursor` on a machine with no Cursor is littering in someone's home
  * directory to no effect.
  */
-export function reachAll({ home = homedir(), text = POINTER } = {}) {
+export function reachAll({ home = homedir(), text = pointer(invocation()) } = {}) {
   return contextFiles(home)
     .filter((c) => existsSync(c.root))
     .map((c) => ({ ...c, ...inject(c.file, text) }));

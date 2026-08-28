@@ -18,7 +18,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { detect, tilde, configPath, brokenConfig } from '../context.js';
-import { reachAll } from '../reach.js';
+import { installState, INSTALL } from '../install.js';
+import { reachAll, pointer } from '../reach.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
@@ -229,7 +230,13 @@ export function scaffold({ at } = {}) {
   // The brain's own CLAUDE.md is the schema and it is large on purpose, but it
   // only loads inside the brain folder — and nobody works there. Without this,
   // a user's agent sitting in a code repo has no idea a brain exists.
-  const reach = reachAll();
+  //
+  // The invocation is resolved rather than assumed. Writing a pointer that
+  // names `exposurie` on a machine where nothing installed it is how retrieval
+  // died silently on every npx install — the file is correct prose naming a
+  // command that is not there, so it never errors and never runs.
+  const install = installState();
+  const reach = reachAll({ text: pointer(install.invocation) });
 
   const open = unresolved(stepCtx(d, target), [
     'claude-code-retention',
@@ -266,6 +273,29 @@ export function scaffold({ at } = {}) {
     ...(reachRows.length
       ? block('', reachRows).filter((l) => l.trim() !== '')
       : ['  no supported client found — nothing written']),
+    ...block('', [['names', `${install.invocation} read --search "<topic>"`]]).filter(
+      (l) => l.trim() !== '',
+    ),
+    // Said out loud rather than left as a slow surprise. The npx form works —
+    // that is the point of writing it — but it pays a package resolve on every
+    // lookup, and the pointer's whole bet is that `read` is cheap enough for an
+    // agent to try speculatively. A retrieval that is slow is a retrieval that
+    // stops being tried, which is the same failure as a broken one, later.
+    ...(install.permanent
+      ? []
+      : [
+          '',
+          ...wrap(
+            `That is the fallback form, because nothing on this machine installed ` +
+              `an exposurie command. It works and it is not fast — every lookup ` +
+              `re-resolves the package. Fix it in one line and the pointer ` +
+              `shortens itself on the next sync:`,
+            74,
+            '  ',
+          ),
+          `      RUN: ${INSTALL}`,
+          '',
+        ]),
     ...wrap(
       'A few hundred bytes per client, between exposurie markers, appended to a ' +
         'file that otherwise belongs to the user. The schema stays in the brain. ' +
@@ -319,6 +349,7 @@ export function scaffold({ at } = {}) {
       kept: kept.map(([f]) => f),
       git: gitStatus,
       config: configPath(),
+      install: { permanent: install.permanent, npx: install.npx, invocation: install.invocation },
       reach: reach.map((c) => ({ id: c.id, file: c.file, action: c.action, verified: c.verified })),
       pending: open.map((p) => p.id),
     },

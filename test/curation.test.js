@@ -21,6 +21,7 @@ import {
   readdirSync,
   writeFileSync,
   appendFileSync,
+  utimesSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -208,6 +209,10 @@ test('sync reads their taste before the prompt it is allowed to overrule', () =>
     },
   ];
   writeFileSync(join(dir, 'a.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + '\n', 'utf8');
+  // A conversation that has ended, so the in-flight gate does not defer it —
+  // see the note on `settled` in sync.test.js.
+  const past = new Date(Date.now() - 3600 * 1000);
+  utimesSync(join(dir, 'a.jsonl'), past, past);
 
   const r = run(h, ['sync']);
   const taste = r.out.indexOf('how-they-work.md');

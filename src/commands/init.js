@@ -6,6 +6,7 @@
 // input, and the human step is never a gate.
 
 import { detect, tilde } from '../context.js';
+import { installState, INSTALL } from '../install.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
@@ -59,9 +60,26 @@ function countExport(exports) {
 
 export function init({ at } = {}) {
   const d = detect();
+  const install = installState();
   const vault = d.vault || expandPath(at) || DEFAULT_VAULT;
 
   const rows = [];
+  // Reported before anything else because it decides whether the rest of this
+  // survives the session. Everything below assumes a command named `exposurie`
+  // exists tomorrow; under npx it does not, and the pointer scaffold writes
+  // would name nothing.
+  // Two different ways to have no command, and they are not the same sentence.
+  // Telling a developer running from a checkout that they are "in an npx cache"
+  // is being confidently wrong about their own machine — the exact failure this
+  // whole pass is about, reintroduced in the fix for it.
+  rows.push([
+    'exposurie',
+    install.permanent
+      ? `installed  (${tilde(install.binary)})`
+      : install.npx
+        ? 'NOT INSTALLED — running from a temporary npx cache, gone after this run'
+        : 'NOT INSTALLED — no exposurie command on this PATH',
+  ]);
   rows.push([
     'brain',
     d.configError
@@ -71,13 +89,25 @@ export function init({ at } = {}) {
         : `not created  (will go at ${tilde(vault)})`,
   ]);
 
+  // The share is printed, not just held. Three clients were once listed here as
+  // bare counts — 6, 165, 11 — and read downstream as three equally present
+  // things, which is how a machine that is 91% Codex got asked three Claude
+  // questions. The number that decides is the one on the page.
+  //
+  // Only when it says something: a single client is always 100%, and a row
+  // asserting that is noise dressed as information.
+  const counted = d.clients.filter((c) => c.present && c.readable && c.count > 0);
+  const corpus = counted.reduce((n, c) => n + c.count, 0);
+  const showShare = counted.length > 1 && corpus > 0;
+
   for (const c of d.clients) {
     if (!c.present) continue;
     const where = tilde(c.root);
+    const share = showShare && c.readable ? ` · ${Math.round((c.count / corpus) * 100)}%` : '';
     rows.push([
       c.name.toLowerCase().replace(/\s+/g, '-'),
       c.readable
-        ? `${c.count} session${c.count === 1 ? '' : 's'}   (${where})`
+        ? `${c.count} session${c.count === 1 ? '' : 's'}${share}   (${where})`
         : `${c.count} found, NO READER YET — will be skipped   (${where})`,
     ]);
   }
@@ -123,6 +153,25 @@ export function init({ at } = {}) {
   }
 
   const steps = [];
+  // FIRST, and before scaffold on purpose. scaffold writes a pointer into every
+  // client's global instructions naming the command that reads the brain — so
+  // the command has to be one that still exists tomorrow. Under npx it is not:
+  // the package sits in a temp cache, `exposurie` is not on PATH, and the
+  // pointer would name nothing. That failed silently for a whole release, in
+  // the one file paid for on every message forever.
+  if (!install.permanent) {
+    steps.push({
+      run: INSTALL,
+      note:
+        (install.npx
+          ? `You are running from a temporary npx cache, which leaves no command behind. `
+          : `There is no exposurie command on this PATH. `) +
+        `Install it before scaffolding: the brain is reached from every project ` +
+        `through a one-line pointer that names this command, and retrieval is ` +
+        `the whole product. This is the only install step, and ` +
+        `\`exposurie uninstall\` reverses all of it.`,
+    });
+  }
   // Never offer scaffold while the pointer is broken: it is the one command
   // that would act on the wrong answer and orphan an existing brain.
   if (d.configError) {
@@ -151,9 +200,12 @@ export function init({ at } = {}) {
     steps.push({
       run: 'exposurie sync',
       note:
-        `Stages a batch of conversation — from this machine and from your claude.ai ` +
-        `export together, newest first — and hands it back for you to fold into ` +
-        `pages. It is resumable, so this can be run as many times as it takes.`,
+        `Stages a batch of conversation — from this machine and from any chat ` +
+        `export you have, newest first — and hands it back for you to fold into ` +
+        `pages. THIS REPEATS. One batch is bounded so it fits in your context, ` +
+        `not because the history is; the first run reads all of it, batch after ` +
+        `batch, until nothing is waiting. Each batch tells you what is left. ` +
+        `Keep going without asking — that is what building the brain is.`,
     });
   }
   for (const p of open) {
@@ -199,7 +251,14 @@ export function init({ at } = {}) {
   return {
     code: open.length ? HUMAN : OK,
     state: vaultState(d.vault, 'init'),
-    pending: open.map((s) => ({ ...s, ctx: { vault: d.vault, settings: d.retention?.path } })),
+    // The PLANNED vault, not just the existing one. A step rendered by `init`
+    // runs before any brain exists, so `d.vault` is null and every step that
+    // names the path had nothing to name. The plan directly above says where
+    // scaffold will put it, and steps are explicitly non-blocking — so by the
+    // time anyone answers one of these, that folder is real. Falling back to
+    // the planned path is the only way this reads as one coherent setup rather
+    // than two commands that disagree about where the brain is.
+    pending: open.map((s) => ({ ...s, ctx: { vault: d.vault || vault, settings: d.retention?.path } })),
     body: [
       ...block('STATE', rows),
       ...(steps.length ? ['', ...planBlock(steps)] : []),
@@ -208,6 +267,7 @@ export function init({ at } = {}) {
     json: {
       brain: d.vault,
       plannedVault: vault,
+      install: { permanent: install.permanent, npx: install.npx, invocation: install.invocation },
       sessions: d.sessions,
       clients: d.clients.map((c) => ({ id: c.id, present: c.present, count: c.count, readable: c.readable })),
       exports: d.exports.map((e) => e.path),

@@ -51,6 +51,9 @@ import { readChatGptExports } from '../extract/chatgpt.js';
 import { findNewFiles, renderFiles } from '../extract/files.js';
 import { redact } from '../extract/redact.js';
 import { conversationExcluded } from '../extract/exclude.js';
+import { stillBeingWritten } from '../extract/live.js';
+import { invocation } from '../install.js';
+import { reachAll, pointer } from '../reach.js';
 import { curate, report } from '../curate.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { readSeam, readState, statePath, vaultState, categoryDirs } from '../vault.js';
@@ -215,6 +218,9 @@ function stage(vault, d) {
         read: c.read,
         size,
         from,
+        // On this machine, and still being appended to while we read it. The
+        // in-flight gate needs to tell that apart from an export snapshot.
+        local: true,
         sortAt: statSync(f).mtimeMs,
       });
     }
@@ -235,6 +241,7 @@ function stage(vault, d) {
         path: s.path,
         client: c.id,
         session: s,
+        local: true,
         sortAt: Date.parse(s.updatedAt || s.endedAt || '') || 0,
       });
     }
@@ -284,6 +291,8 @@ function stage(vault, d) {
       path: s.path,
       client: 'claude.ai',
       session: s,
+      // An export is a snapshot of conversations already finished elsewhere.
+      local: false,
       sortAt: Date.parse(s.updatedAt || s.endedAt || '') || 0,
     });
   }
@@ -299,8 +308,22 @@ function stage(vault, d) {
   // that are never going to be read.
   const included = [];
   const excluded = [];
+  const deferred = [];
   const eligible = [];
   for (const cand of candidates) {
+    // In flight before excluded, and before anything is opened. This is the
+    // conversation somebody is having RIGHT NOW — most often the one running
+    // this very command, plus every subagent it spawned. Reading it makes the
+    // tool material to itself, which on a real full drain returned batch after
+    // batch of "duplication from the active setup task".
+    //
+    // It is a DEFERRAL, not the exclusion gate: nothing is lost, the next sync
+    // takes it once the conversation has actually ended.
+    const live = stillBeingWritten(cand);
+    if (live) {
+      deferred.push({ path: cand.path, why: live });
+      continue;
+    }
     const identity =
       cand.kind === 'webchat'
         ? { cwd: null, title: cand.session.project }
@@ -359,7 +382,16 @@ function stage(vault, d) {
   // their brain gets "nothing has changed since the last sync" while the folder
   // fills up — the same dead end the claude.ai export used to be.
   if (included.length === 0 && rawFiles.files.length === 0) {
-    const why = eligible.length === 0
+    // The deferral gets its own sentence, and it comes first. Somebody whose
+    // only new material is the conversation they are in the middle of would
+    // otherwise be told "nothing has changed" while they are visibly changing
+    // it — which reads as the tool being broken, and is the same silence this
+    // whole file is written against.
+    const why = deferred.length && eligible.length === 0
+      ? `Nothing finished since the last sync. ${deferred.length} conversation${deferred.length === 1 ? ' is' : 's are'} still ` +
+        `going — including this one — and ${deferred.length === 1 ? 'it comes' : 'they come'} on the next sync, once ` +
+        `${deferred.length === 1 ? 'it has' : 'they have'} ended. Nothing is lost.`
+      : eligible.length === 0
       ? (excluded.length ? `Nothing new outside your exclude list, which held back ${excluded.length} session${excluded.length === 1 ? '' : 's'}.` : 'Nothing on this machine has changed since the last sync.')
       : `${eligible.length} transcript${eligible.length === 1 ? '' : 's'} changed, but none held any conversation — ` +
         'they were tool work with nothing said.';
@@ -424,6 +456,7 @@ function stage(vault, d) {
         staged: 0,
         candidates: candidates.length,
         excluded: excluded.length,
+        deferred: deferred.length,
         empty: empty.length,
         exports: {
           found: web.exports,
@@ -463,7 +496,7 @@ function stage(vault, d) {
   }
   writeFileSync(
     join(dir, 'MANIFEST.md'),
-    renderManifest(id, rows, { excluded, empty, remaining, chars, rawTotal, redactions, web }),
+    renderManifest(id, rows, { excluded, deferred, empty, remaining, chars, rawTotal, redactions, web }),
     'utf8',
   );
 
@@ -544,6 +577,9 @@ function stage(vault, d) {
     ]);
   }
   if (excluded.length) summary.push(['excluded', `${excluded.length} by your exclude list`]);
+  if (deferred.length) {
+    summary.push(['still going', `${deferred.length} not finished — next sync takes ${deferred.length === 1 ? 'it' : 'them'}`]);
+  }
   if (empty.length) summary.push(['no conversation', `${empty.length} skipped`]);
   if (web.duplicates) {
     summary.push(['already had', `${web.duplicates} chats repeated across your exports`]);
@@ -621,6 +657,7 @@ function stage(vault, d) {
       chars,
       rawBytes: rawTotal,
       excluded: excluded.length,
+      deferred: deferred.length,
       empty: empty.length,
       redactions,
       standing: !!standingText,
@@ -712,10 +749,33 @@ function done(vault) {
             'want to be worked with, add it to how-they-work.md; most batches ' +
             'show nothing and that is the normal result.',
         },
+        // THE LOOP, as a numbered step. It was a sentence of prose below the
+        // plan — "Run sync again for the next batch" — and rule 2 of the output
+        // contract says exactly what happens to those: an instruction buried in
+        // prose is an instruction skipped. It was. On a real first run the
+        // agent filed batch one of twenty-eight, reported "158 sessions
+        // remained queued", and stopped to ask whether to go on; the backlog
+        // only drained because the person typed "get each and every session"
+        // and then "continue" six times.
+        //
+        // Two things wrong with that, and the second is the real one. The tool
+        // knew there were 158 left and left the arithmetic to a human. And it
+        // turned a decision WE own into a question billed to the user — the
+        // first sync IS the drain, and they asked for it by running the command.
+        ...(next.unfiled > 0
+          ? [
+              {
+                run: 'exposurie sync',
+                note:
+                  `${next.unfiled} conversation${next.unfiled === 1 ? '' : 's'} still unread. Go straight ` +
+                  `on to the next batch and keep repeating this whole cycle — stage, read, write, ` +
+                  `--done — until nothing is waiting. Do NOT stop to ask whether to continue: ` +
+                  `reading their history IS what this command does, and they asked for it by ` +
+                  `running it. Tell them where it got to at the end, not before every batch.`,
+              },
+            ]
+          : []),
       ]),
-      ...(next.unfiled > 0
-        ? ['', ...wrap(`${next.unfiled} session${next.unfiled === 1 ? '' : 's'} have not been read yet. Run sync again for the next batch.`, 74, '  ')]
-        : []),
     ],
     json: { advanced: true, batch: batch.id, remaining: next.unfiled ?? 0, curate: c.json },
   };
@@ -751,6 +811,16 @@ export function sync({ done: isDone } = {}) {
   // It costs nothing extra — `detect()` has already run, and it sits before the
   // dispatch so both the staging and the `--done` path are covered by one call.
   mirror(d.vault, unresolved(stepCtx(d)));
+
+  // Same argument, applied to the pointer. It is written once at scaffold, and
+  // scaffold is typed once — so a brain scaffolded under npx keeps a pointer
+  // naming the slow fallback forever, including after the user does the one
+  // thing we asked and installs the package properly. And a client installed
+  // after setup is never reached at all, because nothing revisits the question.
+  //
+  // inject() compares bytes and reports `unchanged` without writing, so on the
+  // overwhelmingly common path this reads four small files and touches none.
+  reachAll({ text: pointer(invocation()) });
 
   return isDone ? done(d.vault) : stage(d.vault, d);
 }
@@ -865,6 +935,15 @@ function renderManifest(id, rows, extra) {
     out.push('Only the head of each was read, far enough to find which folder it', '');
     out.push('belonged to. None of what was said in them was loaded.', '');
     for (const e of extra.excluded) out.push(`- \`${basename(e.path)}\` — ${e.why}`);
+    out.push('');
+  }
+  if (extra.deferred?.length) {
+    out.push('## Still going — held for the next sync', '');
+    out.push('These conversations had not finished when this batch was staged, so', '');
+    out.push('nothing in them was read. Half a conversation is worse than none: the', '');
+    out.push('half explaining why is usually the half not written yet. They are not', '');
+    out.push('excluded and nothing is lost — the next sync takes them.', '');
+    for (const e of extra.deferred) out.push(`- \`${basename(e.path)}\` — ${e.why}`);
     out.push('');
   }
   if (extra.empty.length) {

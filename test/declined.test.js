@@ -130,12 +130,19 @@ test('a decline is not a resolution, and can never be read as one', () => {
   const { vault } = brain();
   decline(vault, 'claude-code-retention', 'no thanks');
 
+  // A machine where Claude Code IS the corpus, so the step's own relevance gate
+  // is satisfied and what is being tested is only the decline. `readable` and
+  // `count` are on here because relevance is now a question of share rather
+  // than of mere presence — a client at 3% of somebody's sessions is not a
+  // reason to edit another vendor's settings file.
+  const claudeOnly = [{ id: 'claude-code', present: true, readable: true, count: 1 }];
+
   const step = STEPS['claude-code-retention'];
   assert.equal(step.resolved({ retention: { days: 30 } }), false, 'declining made the step look done');
-  assert.equal(step.applies({ clients: [{ id: 'claude-code', present: true }] }), true, 'declining rewrote applies');
+  assert.equal(step.applies({ clients: claudeOnly }), true, 'declining rewrote applies');
 
   // It is closed for asking, and only there.
-  const open = unresolved({ vault, clients: [{ id: 'claude-code', present: true }], retention: { days: 30 } }, [
+  const open = unresolved({ vault, clients: claudeOnly, retention: { days: 30 } }, [
     'claude-code-retention',
   ]);
   assert.deepEqual(open, []);

@@ -134,6 +134,52 @@ test('the user is shown the path to their own brain, not told to find it', () =>
   assert.match(said, /graph/i, 'nothing tells them how to actually see the thing');
 });
 
+test('the step that cannot fail comes before the step that can', () => {
+  // On a real machine the old order — install first, open the folder only "if
+  // Obsidian will not install" — cost a Homebrew hang, a killed process, a
+  // blocked browser download and a manual install, all before the person had
+  // seen one page of their own brain. The folder was openable the entire time.
+  const said = lines(STEPS.obsidian, { vault: '/x/brain' }).join('\n');
+  const opensFolder = said.search(/open|explorer|xdg-open/);
+  const installs = said.search(/brew|winget|flatpak/);
+  assert.ok(opensFolder > -1 && installs > -1, 'both halves must be present');
+  assert.ok(opensFolder < installs, 'the guaranteed win must come first');
+});
+
+test('installing is ONE attempt, with no routing around a block', () => {
+  // An agent told to install software keeps trying routes until one works. That
+  // is right almost everywhere and wrong here: the thing being retried is
+  // optional and the person is watching it happen.
+  const said = lines(STEPS.obsidian, { vault: '/x/brain' }).join('\n');
+  assert.match(said, /ONE attempt/, 'nothing bounds the retrying');
+  assert.match(said, /STOP/, 'no instruction to give up cleanly');
+});
+
+test('a placeholder is never quoted into the shape of a runnable command', () => {
+  // `init` renders steps before any brain exists. The missing-path fallback was
+  // the literal words "the brain folder", substituted into the open command and
+  // quoted: `explorer "the brain folder"`. That parses, it runs, and it fails —
+  // a command naming nothing, which is the exact defect class this whole pass
+  // is about, reintroduced inside the fix for it.
+  const said = lines(STEPS.obsidian, {}).join('\n');
+  assert.ok(!/["'][^"']*the brain folder[^"']*["']/.test(said), 'a placeholder was quoted as a path');
+});
+
+test('init names the brain it is about to create, not a blank', () => {
+  const h = codexMachine();
+  const out = run(h, ['init']).out;
+  const planned = join(h, 'brain');
+  assert.ok(out.includes(planned), 'the pending step never named the planned brain path');
+});
+
+test('the Obsidian step is done FOR the user, not read out at them', () => {
+  // Every line of it is addressed to the agent — "open their brain for them",
+  // "walk them in" — so it belongs in the channel that means that. It shipped
+  // under "RELAY THESE EXACTLY, do not paraphrase".
+  assert.ok(STEPS.obsidian.onYes, 'must be an action the agent takes');
+  assert.ok(!STEPS.obsidian.verbatim, 'must not be words read aloud to a person');
+});
+
 // ------------------------------------------------------------------- chatgpt
 
 function chatgptZip(path, conversations, extra = {}) {
