@@ -47,7 +47,8 @@
 // three different things somebody said.
 
 import { statSync } from 'node:fs';
-import { openZip, ZipError } from './zip.js';
+import { ZipError } from './zip.js';
+import { openArchive, readConversations } from './archive.js';
 
 export const CONVERSATIONS = 'conversations.json';
 
@@ -185,30 +186,27 @@ function toSession(conv, source) {
 export function readChatGptExport(path) {
   let zip;
   try {
-    zip = openZip(path);
+    zip = openArchive(path);
   } catch (e) {
     return { path, ok: false, error: e instanceof ZipError ? e.message : String(e.message || e), sessions: [] };
   }
 
   try {
-    if (!zip.has(CONVERSATIONS)) {
-      return { path, ok: false, error: `no ${CONVERSATIONS} in the archive`, sessions: [] };
+    // `conversations.json`, or the numbered parts OpenAI splits it into. Every
+    // error below names the PART that failed: one bad file out of twelve is
+    // something a person can act on, and "the export is not valid JSON" about a
+    // folder holding twelve files is not.
+    const read = readConversations(zip);
+    if (!read.ok) {
+      const why = {
+        missing: () => `no ${CONVERSATIONS} in the archive`,
+        invalid: () => `${read.part} is not valid JSON (${read.detail})`,
+        'not-a-list': () =>
+          `${read.part} is not a list of conversations — the export format may have changed`,
+      }[read.reason];
+      return { path, ok: false, error: why(), sessions: [] };
     }
-
-    let convs;
-    try {
-      convs = JSON.parse(zip.read(CONVERSATIONS));
-    } catch (e) {
-      return { path, ok: false, error: `${CONVERSATIONS} is not valid JSON (${e.message})`, sessions: [] };
-    }
-    if (!Array.isArray(convs)) {
-      return {
-        path,
-        ok: false,
-        error: `${CONVERSATIONS} is not a list of conversations — the export format may have changed`,
-        sessions: [],
-      };
-    }
+    const convs = read.conversations;
 
     const sessions = [];
     const instructions = new Set();

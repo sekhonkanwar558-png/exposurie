@@ -283,13 +283,14 @@ export const STEPS = {
       '5. Anthropic emails you a download link. This can take a few HOURS.',
       '   Nothing appears on screen. It has not failed — close the tab.',
       '6. When the email arrives, download the .zip into your Downloads folder',
-      '   and leave it there. Do not unzip it.',
+      '   and leave it there. It does not need unzipping, and unzipping it is',
+      '   fine — exposurie reads the folder as readily as the zip.',
       '7. IF THE EMAIL HAS MORE THAN ONE LINK, download every one of them.',
       '   A large account is split across numbered zips (batch-0000,',
       '   batch-0001...). Taking only the first looks complete and is not:',
       '   the older conversations are LISTED in it with their text missing.',
     ],
-    doneWhen: 'a data-*.zip appears in the Downloads folder',
+    doneWhen: 'a data-* export appears in Downloads — the zip, or the folder if they unpacked it',
     resolved: (ctx) => (ctx.exports?.length ?? 0) > 0,
 
     /**
@@ -336,9 +337,9 @@ export const STEPS = {
       '   take up to 7 DAYS. Nothing appears on screen. It has not failed.',
       '6. THE LINK EXPIRES 24 HOURS AFTER IT ARRIVES. Download it the day the',
       '   email lands, or it has to be requested again.',
-      '7. Put the .zip in your Downloads folder and leave it there. Do not',
-      '   unzip it. The filename does not matter — exposurie identifies it by',
-      '   what is inside.',
+      '7. Put it in your Downloads folder and leave it there. It does not need',
+      '   unzipping, and unzipping it is fine. The filename does not matter',
+      '   either — exposurie identifies an export by what is inside it.',
       '',
       'Two things worth telling them before they click:',
       '  - Requesting a new export CANCELS any earlier one still pending. Ask',
@@ -347,7 +348,7 @@ export const STEPS = {
       '    Free, Plus and Pro. If they cannot find the button, that is why —',
       '    it is not something they are doing wrong.',
     ],
-    doneWhen: 'a ChatGPT export zip appears in the Downloads folder',
+    doneWhen: 'a ChatGPT export appears in Downloads — the zip, or the folder if OpenAI sent one',
     resolved: (ctx) => (ctx.chatgptExports?.length ?? 0) > 0,
 
     /**

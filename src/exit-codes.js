@@ -14,7 +14,13 @@ export const HUMAN = 10;  // a step needs a person. NOT a failure.
 export const FOOTERS = {
   [OK]: 'EXIT 0 — done.',
   [ERROR]: 'EXIT 1 — something failed. Read the ERROR block above. Do not retry blindly.',
-  [USAGE]: 'EXIT 2 — no such command. RUN: exposurie help',
+  // "no such command" was the whole of this line for as long as a bad command
+  // name was the only way to reach it. `--at` naming a path with no brain in it
+  // reaches it too, and an agent that read this footer under an ERROR block
+  // about a missing brain was being sent to the help text for a problem the
+  // help text does not have. The code's own definition already said "bad
+  // flags"; only what it printed was narrow.
+  [USAGE]: 'EXIT 2 — the call was wrong, not the machine. Nothing ran. Fix the command from the ERROR block above, or RUN: exposurie help',
   [HUMAN]:
     'EXIT 10 — there is a step for your user. Nothing has failed. ' +
     'Do the RUN steps above, relay the FOR YOUR USER steps, and carry on.',

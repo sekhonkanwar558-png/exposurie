@@ -11,8 +11,9 @@ import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
 import { DEFAULT_VAULT, expandPath, vaultState } from '../vault.js';
-import { openZip, ZipError } from '../extract/zip.js';
-import { CONVERSATIONS, MEMORIES } from '../extract/webchat.js';
+import { ZipError } from '../extract/zip.js';
+import { openArchive, readConversations } from '../extract/archive.js';
+import { MEMORIES } from '../extract/webchat.js';
 
 /**
  * How much is actually in the export, without folding any of it in.
@@ -26,9 +27,12 @@ function countExport(exports) {
   const newest = [...exports].sort((a, b) => b.size - a.size)[0];
   let zip;
   try {
-    zip = openZip(newest.path);
-    const list = zip.has(CONVERSATIONS) ? JSON.parse(zip.read(CONVERSATIONS)) : [];
-    const all = Array.isArray(list) ? list : [];
+    zip = openArchive(newest.path);
+    // Across every numbered part, and out of a folder as readily as out of a
+    // zip. Counting only a literal `conversations.json` at the root is what let
+    // this command report an export it had correctly found as holding nothing.
+    const read = readConversations(zip);
+    const all = read.ok ? read.conversations : [];
     // A conversation the export listed but did not fill in. Counted here so the
     // very first command can say a split export is short, which is when the
     // person is still standing next to the download email.
@@ -59,6 +63,13 @@ function countExport(exports) {
 }
 
 export function init({ at } = {}) {
+  // `detect()`, not `detect({ at })`, and that is deliberate rather than the
+  // dropped-flag bug it resembles. Everywhere else `--at` outranks the pointer
+  // because it names the brain to ACT on. Here and in `scaffold` the question is
+  // the other one -- which brain already EXISTS -- and one brain per person is
+  // enforced against the pointer, not against a flag. So an existing brain wins
+  // below: reporting a plan for somewhere else would print a plan that
+  // `scaffold` then refuses, and init's whole job is to be the plan that works.
   const d = detect();
   const install = installState();
   const vault = d.vault || expandPath(at) || DEFAULT_VAULT;

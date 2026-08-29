@@ -16,6 +16,8 @@ import { read } from './read.js';
 import { decline } from './decline.js';
 import { uninstall } from './uninstall.js';
 import { OK } from '../exit-codes.js';
+import { vaultState } from '../vault.js';
+import { resolveVault } from '../context.js';
 import { NAMES } from './names.js';
 
 export const COMMANDS = {
@@ -29,7 +31,7 @@ export const COMMANDS = {
   },
   sync: {
     summary: 'stage what is new so your agent can fold it into the brain',
-    run: (v) => sync({ done: v.done }),
+    run: (v) => sync({ done: v.done, abort: v.abort, at: v.at }),
   },
   read: {
     summary: 'open a page, one section of it, or find which page holds a thing',
@@ -45,7 +47,14 @@ export const COMMANDS = {
   },
   help: {
     summary: 'this',
-    run: () => ({ code: OK, body: helpText() }),
+    // Help carries the state line like every other command. It used to be the
+    // one command that did not, which was invisible while `--help` was being
+    // swallowed by whatever positional preceded it — and became a lie the
+    // moment the flag started working: help printed `no brain yet` and pointed
+    // at `init` on machines with a brain sitting right there. The state line is
+    // how the sync nudge reaches an agent at all, so the command a confused
+    // agent runs is the last one that should be missing it.
+    run: (v) => ({ code: OK, state: vaultState(resolveVault(v.at), 'help'), body: helpText() }),
   },
 };
 
@@ -70,9 +79,11 @@ export function helpText() {
     ...NAMES.map((n) => `  ${n.padEnd(w)}  ${COMMANDS[n].summary}`),
     '',
     'FLAGS',
-    '  --at <path>     where the brain should live (default ~/brain)',
+    '  --help          this, on any command. It never runs the command.',
+    '  --at <path>     the brain to use; where a new one goes (default ~/brain)',
     '  --json          machine-readable output instead of the task list',
     '  --done          (sync) the pages are written; move the cutoff',
+    '  --abort         (sync) throw the staged batch away; the cutoff stays put',
     '  --because "..." (decline) what your user actually said',
     '',
     'READING',

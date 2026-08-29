@@ -22,6 +22,7 @@ function main(argv) {
         json: { type: 'boolean' },
         help: { type: 'boolean' },
         done: { type: 'boolean' },
+        abort: { type: 'boolean' },
         section: { type: 'string' },
         nth: { type: 'string' },
         search: { type: 'string' },
@@ -34,7 +35,7 @@ function main(argv) {
     return { code: USAGE, error: { message: e.message, fix: 'RUN: exposurie help' } };
   }
 
-  const cmd = parsed.positionals[0] ?? (parsed.values.help ? 'help' : 'init');
+  const cmd = parsed.positionals[0] ?? 'init';
   const entry = COMMANDS[cmd];
   if (!entry) {
     return {
@@ -45,6 +46,21 @@ function main(argv) {
       },
     };
   }
+  // `--help` is a question, and a question must never be able to perform an
+  // action. The flag used to be consulted only when nothing was named —
+  // `positionals[0] ?? (values.help ? 'help' : 'init')` — so a command name won
+  // and the flag was parsed and then dropped. `exposurie sync --help` ran a real
+  // sync; on the first install on somebody else's machine it staged a batch the
+  // agent then had to go and clean up. Asking what a command does cost the user
+  // the command. Answering the question BEFORE dispatch makes that impossible
+  // for every command in the table, including ones this version does not have
+  // yet — a new command cannot reintroduce it by forgetting to check a flag.
+  //
+  // It sits AFTER the unknown-name check on purpose. A name that is not a
+  // command is a usage error whatever else is on the line, and exit 0 with a
+  // help page would tell an agent its typo worked.
+  if (parsed.values.help) return COMMANDS.help.run(parsed.values, parsed.positionals);
+
   return entry.run(parsed.values, parsed.positionals.slice(1));
 }
 

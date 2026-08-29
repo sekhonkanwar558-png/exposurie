@@ -11,7 +11,7 @@
 
 import { OK, USAGE } from '../exit-codes.js';
 import { STEPS, decline as record, declined } from '../pending.js';
-import { detect } from '../context.js';
+import { detect, noBrainAt } from '../context.js';
 import { vaultState } from '../vault.js';
 
 export function decline(values = {}, positionals = []) {
@@ -40,6 +40,21 @@ export function decline(values = {}, positionals = []) {
   }
 
   const d = detect({ at: values.at });
+  // `{ at }` was already being passed here, to a `detect()` that took no
+  // arguments at all — so the flag was accepted and discarded, and a decline
+  // went into whichever brain the pointer named. It is honoured now, which makes
+  // this second case reachable for the first time.
+  if (d.askedVault && !d.vault) {
+    return {
+      code: USAGE,
+      state: vaultState(d.pointedVault, 'decline'),
+      error: noBrainAt(
+        d.askedVault,
+        d.pointedVault,
+        `exposurie decline ${id}${values.because ? ` --because "${values.because}"` : ''}`,
+      ),
+    };
+  }
   if (!d.vault) {
     return {
       code: USAGE,

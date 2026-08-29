@@ -229,11 +229,19 @@ package manager for the OS you are on, not three with a note to pick. The step
 that gets you into Obsidian names the exact folder your brain is in, because the
 tool knows it and you should not have to go looking.
 
-Exports are identified by **what is inside the zip**, never by its name —
+Exports are identified by **what is inside them**, never by their name —
 Anthropic's is reliably `data-*.zip` and OpenAI's is reliably nothing, so a
 filename rule would miss every ChatGPT export. The trade is that a corrupt
 archive matches nothing and would vanish; so a zip that *looks* like an export
 and will not open is reported as broken rather than silently skipped.
+
+**An export does not have to be a zip, and `conversations.json` does not have to
+be one file.** OpenAI ships large accounts already unpacked, split across
+`conversations-000.json` … `conversations-011.json`; Anthropic splits across
+numbered zips; and either one, unzipped by hand, is a folder. All four shapes
+are read, because a folder is opened behind the same handle a zip is. Nothing
+about that is a convenience: a 1,164-conversation export sat in Downloads on the
+first machine somebody else installed this on, and the tool never saw it.
 
 ## Reading a claude.ai export, and what is actually in one
 

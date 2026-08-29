@@ -36,7 +36,8 @@
 
 import { statSync } from 'node:fs';
 import { basename } from 'node:path';
-import { openZip, ZipError } from './zip.js';
+import { ZipError } from './zip.js';
+import { openArchive, readConversations } from './archive.js';
 
 export const CONVERSATIONS = 'conversations.json';
 export const MEMORIES = 'memories.json';
@@ -203,7 +204,7 @@ function readStanding(zip) {
 export function readExport(path) {
   let zip;
   try {
-    zip = openZip(path);
+    zip = openArchive(path);
   } catch (e) {
     return {
       path,
@@ -224,18 +225,26 @@ export function readExport(path) {
     // `emptyBodies` below.
     const hollow = [];
 
-    if (zip.has(CONVERSATIONS)) {
-      const convs = parse(zip.read(CONVERSATIONS));
-      if (!Array.isArray(convs)) {
-        return {
-          path,
-          ok: false,
-          error: `${CONVERSATIONS} is not a list of conversations — the export may be from a format we have not seen`,
-          sessions: [],
-          standing: null,
-        };
-      }
-      for (const c of convs) {
+    // `conversations.json`, or the numbered parts it can arrive in. Anthropic
+    // splits a large account across numbered ZIPS, which this file already
+    // handled; nothing handled numbered FILES, which is how the same split
+    // looks once an export is unpacked, and how OpenAI ships it either way.
+    // One rule covers both now, and the error names the part that failed.
+    const read = readConversations(zip);
+    if (!read.ok && read.reason !== 'missing') {
+      return {
+        path,
+        ok: false,
+        error:
+          read.reason === 'invalid'
+            ? `${read.part} is not valid JSON (${read.detail})`
+            : `${read.part} is not a list of conversations — the export may be from a format we have not seen`,
+        sessions: [],
+        standing: null,
+      };
+    }
+    if (read.ok) {
+      for (const c of read.conversations) {
         const s = toSession(c, path);
         if (s.turns.length === 0) {
           skippedEmpty += 1;

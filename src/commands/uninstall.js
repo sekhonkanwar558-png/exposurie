@@ -35,6 +35,19 @@ import { vaultState } from '../vault.js';
 
 export function uninstall({ at } = {}) {
   const d = detect({ at });
+
+  // Same dropped flag as `decline`: `{ at }` was passed to a parameterless
+  // `detect()`, so this command was printing "YOUR BRAIN IS UNTOUCHED" over a
+  // path the user had not named. The flag is honoured now.
+  //
+  // But it does NOT refuse the way `sync`, `read` and `decline` do, and the
+  // suite is what said so: leaving must always finish. Here `--at` only decides
+  // which folder gets NAMED — nothing is read from it and nothing is written to
+  // it — so refusing over a wrong path would strand the pointer blocks in
+  // somebody's client files at the exact moment they asked to be rid of them.
+  // Refusing to let someone leave, over a cosmetic argument, is the worst thing
+  // this command could do. It says the path was empty and gets on with it.
+  const missingAsked = d.askedVault && !d.vault ? d.askedVault : null;
   const results = unreachAll();
 
   const removed = results.filter((r) => r.action === 'removed');
@@ -80,6 +93,16 @@ export function uninstall({ at } = {}) {
         `If you want it gone, delete that folder yourself. This command will ` +
           `not, and no flag makes it: a tool that can erase the thing it spent ` +
           `months building for you is not one you should have trusted with it.`,
+        74,
+        '  ',
+      ),
+    );
+  } else if (missingAsked) {
+    body.push(
+      ...wrap(
+        `You named ${tilde(missingAsked)} with --at and there is no brain there, ` +
+          `so there is nothing to name here. Everything above still happened: ` +
+          `what exposurie wrote outside a brain is gone either way.`,
         74,
         '  ',
       ),

@@ -39,12 +39,14 @@ import {
   openSync,
   readSync,
   closeSync,
+  realpathSync,
+  rmSync,
 } from 'node:fs';
 import { join, basename } from 'node:path';
 
-import { detect, brokenConfig } from '../context.js';
+import { detect, brokenConfig, noBrainAt } from '../context.js';
 import { block, planBlock, wrap } from '../output.js';
-import { OK, ERROR } from '../exit-codes.js';
+import { OK, ERROR, USAGE } from '../exit-codes.js';
 import { describe } from '../extract/transcript.js';
 import { readExports, renderStanding } from '../extract/webchat.js';
 import { readChatGptExports } from '../extract/chatgpt.js';
@@ -61,6 +63,31 @@ import { readSeam, readState, statePath, vaultState, categoryDirs } from '../vau
 const DEFAULT_BATCH_CHARS = 120000;
 
 const stagedDir = (vault) => join(vault, '.exposurie', 'staged');
+
+/**
+ * One file, one name.
+ *
+ * A transcript's identity here is its path, and a path is not unique: a symlink,
+ * a junction, or a home directory pointed somewhere else all give the same file
+ * two names, and the resume offsets are keyed by name. Reported from the first
+ * outside install, where an agent isolating one client by faking `HOME` had the
+ * same conversation staged twice — once under each name.
+ *
+ * The workaround that surfaced it does not matter. This is wrong on its own:
+ * `~/.claude` symlinked onto another drive is an ordinary thing to do, and the
+ * cost of getting it wrong is a person's own words written into their brain
+ * twice.
+ *
+ * Falls back to the path it was given, because a file that cannot be resolved
+ * is a file that will fail to be read a moment later, with a better message.
+ */
+function canonical(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
 const iso = () => new Date().toISOString();
 const stamp = () => iso().replace(/[:.]/g, '-').slice(0, 19);
 
@@ -198,17 +225,27 @@ function stage(vault, d) {
   // Candidates: readable clients only, and only transcripts with unread bytes.
   const candidates = [];
   const clientErrors = [];
+  // Two names for one transcript become one candidate. Deduped by the resolved
+  // path rather than the listed one, so an aliased client folder cannot put the
+  // same conversation in a batch twice.
+  const takenPaths = new Set();
   for (const c of d.clients) {
     if (!c.readable || !c.present || typeof c.sessions === 'function') continue;
-    for (const f of c.files) {
+    for (const raw of c.files) {
+      const f = canonical(raw);
+      if (takenPaths.has(f)) continue;
       let size;
       try {
         size = statSync(f).size;
       } catch {
         continue;
       }
-      const from = seen[f]?.bytes ?? 0;
+      // Both keys, on purpose. Offsets recorded before this fix are under the
+      // name that was listed, and a brain that has been synced for weeks must
+      // not re-stage its whole history because the key got better.
+      const from = seen[f]?.bytes ?? seen[raw]?.bytes ?? 0;
       if (size <= from) continue;
+      takenPaths.add(f);
       candidates.push({
         kind: 'transcript',
         path: f,
@@ -677,6 +714,82 @@ function stage(vault, d) {
 }
 
 // ---------------------------------------------------------------------- done
+/**
+ * Throw a staged batch away.
+ *
+ * Reported from the first outside install: a batch staged by accident had no
+ * way out. Running `sync` again only stages a second one beside it, and
+ * `--done` refuses to close it — correctly, since the pages were never
+ * written — so the folder and the pending record sit there permanently, and
+ * an agent reading the brain finds two staged batches with nothing to say which
+ * is live.
+ *
+ * The reason this is safe to offer at all is the same property that makes
+ * `--done` strict: THE CUTOFF ONLY EVER MOVES ON EVIDENCE. A batch that was
+ * never closed never advanced anything, so discarding it cannot lose a
+ * conversation — every session in it is still unread and comes back on the
+ * next sync. That is stated in the output, because a person about to discard
+ * something needs to know what it costs before they believe it costs nothing.
+ *
+ * It removes the staged folder and the pending record. It does not touch the
+ * cutoff, and it does not touch a single page.
+ */
+function abort(vault) {
+  const state = readState(vault) || {};
+  const batch = state.pendingBatch;
+
+  if (!batch) {
+    return {
+      code: ERROR,
+      state: vaultState(vault, 'sync'),
+      error: {
+        message: 'There is no staged batch, so there is nothing to discard.',
+        fix: 'RUN: exposurie sync',
+      },
+    };
+  }
+
+  const dir = join(stagedDir(vault), batch.id);
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (e) {
+    return {
+      code: ERROR,
+      state: vaultState(vault, 'sync'),
+      error: {
+        message: `Batch ${batch.id} could not be removed (${e.message}). Nothing was changed.`,
+        fix: `DELETE it yourself: ${dir}`,
+      },
+    };
+  }
+
+  const next = { ...state, unfiled: 0 };
+  delete next.pendingBatch;
+  writeState(vault, next);
+
+  return {
+    code: OK,
+    state: vaultState(vault, 'sync'),
+    body: [
+      ...block('DISCARDED', [
+        ['batch', batch.id],
+        ['sessions', `${batch.sessions ?? 0} unstaged`],
+        ['cutoff', 'not moved'],
+        ['pages', 'not touched'],
+      ]),
+      '',
+      ...wrap(
+        `Nothing is lost. The cutoff only ever moves on \`sync --done\`, and this ` +
+          `batch never got there — every conversation in it is still unread, and ` +
+          `comes back the next time you sync.`,
+        74,
+        '  ',
+      ),
+    ],
+    json: { aborted: batch.id, sessions: batch.sessions ?? 0 },
+  };
+}
+
 function done(vault) {
   const seam = readSeam(vault) || {};
   const state = readState(vault) || {};
@@ -781,8 +894,19 @@ function done(vault) {
   };
 }
 
-export function sync({ done: isDone } = {}) {
-  const d = detect();
+export function sync({ done: isDone, abort: isAbort, at } = {}) {
+  // Opposites. Guessing which one they meant is how a batch gets closed by
+  // somebody trying to throw it away.
+  if (isDone && isAbort) {
+    return {
+      code: USAGE,
+      error: {
+        message: '--done and --abort are opposites: one closes a batch, the other throws it away.',
+        fix: 'RUN: exposurie sync --done   (or --abort, but not both)',
+      },
+    };
+  }
+  const d = detect({ at });
   // An unreadable pointer is not a machine without a brain. Saying "RUN:
   // exposurie scaffold" here sends the user to build a second one.
   if (d.configError) {
@@ -790,6 +914,21 @@ export function sync({ done: isDone } = {}) {
       code: ERROR,
       state: { vault: null, self: 'sync', brokenPointer: true },
       error: brokenConfig(d.configError),
+    };
+  }
+  // Named a path with no brain in it. Falling through to `noBrain()` here would
+  // say "there is no brain on this machine" to somebody whose brain is fine and
+  // whose path was wrong, and `--at` was dropped entirely before this: the flag
+  // was accepted and the batch went to the pointer's brain, silently.
+  if (d.askedVault && !d.vault) {
+    return {
+      code: USAGE,
+      state: vaultState(d.pointedVault, 'sync'),
+      error: noBrainAt(
+        d.askedVault,
+        d.pointedVault,
+        `exposurie sync${isDone ? ' --done' : ''}${isAbort ? ' --abort' : ''}`,
+      ),
     };
   }
   if (!d.vault) return noBrain();
@@ -822,6 +961,7 @@ export function sync({ done: isDone } = {}) {
   // overwhelmingly common path this reads four small files and touches none.
   reachAll({ text: pointer(invocation()) });
 
+  if (isAbort) return abort(d.vault);
   return isDone ? done(d.vault) : stage(d.vault, d);
 }
 

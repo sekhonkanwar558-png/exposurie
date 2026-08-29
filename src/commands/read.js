@@ -15,10 +15,10 @@
 // ambiguous section prints one command per candidate. That is rule 3 of the
 // output contract applied where it is most easily skipped: the failure paths.
 
-import { existsSync, readFileSync } from 'node:fs';
-import { readSeam, vaultState, expandPath, DEFAULT_VAULT } from '../vault.js';
-import { readConfig, configState, brokenConfig } from '../context.js';
-import { OK, ERROR } from '../exit-codes.js';
+import { readFileSync } from 'node:fs';
+import { readSeam, vaultState, expandPath } from '../vault.js';
+import { configState, brokenConfig, resolveVault, noBrainAt, pointedVault } from '../context.js';
+import { OK, ERROR, USAGE } from '../exit-codes.js';
 import {
   allPages,
   headings,
@@ -30,14 +30,6 @@ import {
   q,
   DEFAULT_READ_BUDGET,
 } from '../read.js';
-
-function resolveVault(at) {
-  const explicit = expandPath(at);
-  if (explicit) return explicit;
-  const cfg = readConfig();
-  if (cfg?.vault && existsSync(cfg.vault)) return cfg.vault;
-  return existsSync(DEFAULT_VAULT) ? DEFAULT_VAULT : null;
-}
 
 /**
  * Match a page by title. Exact beats prefix beats substring, for the same
@@ -69,6 +61,32 @@ export function read(values = {}, positionals = []) {
   }
   const vault = resolveVault(values.at);
   const state = vaultState(vault, 'read');
+
+  // A named path that holds no brain is not "no brain on this machine", and the
+  // difference is the whole value of the flag. Without this, `read --at ~/typo
+  // --search x` searched a directory that was not there, found nothing, and
+  // printed "Nothing in the brain matches. Say so plainly; do not answer from
+  // memory." — exit 0, stated with authority, having never opened a brain. A
+  // retrieval failure that succeeds is the worst output this product can make.
+  const asked = expandPath(values.at);
+  if (asked && !vault) {
+    const pointed = pointedVault();
+    // Their own call, rebuilt without the flag. `exposurie read` on its own is
+    // not a command, so the generic form would hand an agent a second broken
+    // one to run.
+    const retry = ['exposurie read'];
+    if (positionals[0]) retry.push(q(positionals[0]));
+    if (values.search) retry.push(`--search ${q(values.search)}`);
+    if (values.section) retry.push(`--section ${q(values.section)}`);
+    if (values.nth) retry.push(`--nth ${values.nth}`);
+    if (values.outline) retry.push('--outline');
+    if (values.full) retry.push('--full');
+    return {
+      code: USAGE,
+      state: vaultState(pointed, 'read'),
+      error: noBrainAt(asked, pointed, retry.join(' ')),
+    };
+  }
 
   if (!vault) {
     return {

@@ -9,15 +9,16 @@
 // marked `readable: false` and REPORTED as such — a client we cannot parse yet
 // is a known gap, not a silent omission.
 
-import { existsSync, readdirSync, statSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 import { readTranscript } from './extract/transcript.js';
 import { readRollout } from './extract/codex.js';
-import { openZip } from './extract/zip.js';
+import { openArchive, isConversationsPart } from './extract/archive.js';
 import { cursorRoot, readCursorSessions, countCursorSessions, cursorMtime } from './extract/cursor.js';
 import { SIGNATURE as CHATGPT_SIGNATURE } from './extract/chatgpt.js';
+import { expandPath, isVault, DEFAULT_VAULT } from './vault.js';
 
 const HOME = homedir();
 
@@ -116,69 +117,118 @@ export const CLIENTS = [
 /** Names Anthropic and OpenAI actually give their downloads. */
 const LOOKS_LIKE_AN_EXPORT = [/^data-.*\.zip$/i, /chatgpt/i, /^conversations.*\.zip$/i];
 
-function sniff(path, filename) {
-  let zip;
+/**
+ * Whose export is this, from what is inside it.
+ *
+ * A pure function over member names, so it can be run against a directory
+ * listing as cheaply as against a zip index. That is what makes an unpacked
+ * export detectable without walking it first.
+ *
+ * A directory lists `projects` where a zip index lists `projects/`, so both
+ * forms are accepted. Same export, two containers, one answer.
+ */
+function classify(names, filename) {
+  // Numbered parts count. Requiring the literal `conversations.json` is what
+  // made a 1,164-conversation export invisible on the first machine somebody
+  // else installed this on: OpenAI had split it across `conversations-000.json`
+  // through `conversations-011.json`.
+  if (!names.some(isConversationsPart)) return null;
+  if (names.includes(CHATGPT_SIGNATURE)) return 'chatgpt';
+  const holds = (d) => names.some((n) => n === d || n.startsWith(d + '/'));
+  if (names.includes('users.json') || names.includes('memories.json') || holds('projects') || holds('design_chats')) {
+    return 'claude';
+  }
+  // Anthropic's download is reliably named this way. It is a weaker signal
+  // than a marker file, which is why it is last rather than first — but a
+  // stripped-down export that carries only `conversations.json` is still
+  // theirs, and refusing it would lose a whole history over a missing
+  // `users.json`. The extension is optional because the same download, once
+  // unzipped, is a folder called `data-2026-08-26`.
+  if (/^data-.*(\.zip)?$/i.test(filename)) return 'claude';
+  // Conversations and nothing that identifies them. Do not guess: handing an
+  // export to the wrong reader is the failure this function is shaped around.
+  return null;
+}
+
+/**
+ * Open one candidate, classify it, and record it if it is an export.
+ *
+ * Opened exactly once. A zip index and a directory listing are both cheap, and
+ * neither inflates or parses anything — the whole detection pass costs one
+ * read of the end of each archive.
+ */
+function take(path, filename, out) {
+  let archive;
   try {
-    zip = openZip(path);
-    const names = zip.names();
-    if (!names.includes('conversations.json')) return null;
-    if (names.includes(CHATGPT_SIGNATURE)) return 'chatgpt';
-    if (
-      names.includes('users.json') ||
-      names.includes('memories.json') ||
-      names.some((n) => n.startsWith('projects/') || n.startsWith('design_chats/'))
-    ) {
-      return 'claude';
-    }
-    // Anthropic's download is reliably named this way. It is a weaker signal
-    // than a marker file, which is why it is last rather than first — but a
-    // stripped-down export that carries only `conversations.json` is still
-    // theirs, and refusing it would lose a whole history over a missing
-    // `users.json`.
-    if (/^data-.*\.zip$/i.test(filename)) return 'claude';
-    // conversations.json and nothing that identifies it. Do not guess: handing
-    // a file to the wrong reader is the failure this function is shaped around.
-    return null;
+    archive = openArchive(path);
   } catch (e) {
-    // A zip that will not open is only OUR problem if it was plausibly an
-    // export. Reporting every corrupt archive in someone's Downloads folder is
+    // An archive that will not open is only OUR problem if it was plausibly an
+    // export. Reporting every corrupt file in someone's Downloads folder is
     // noise; saying nothing about a half-downloaded `data-*.zip` is the silent
     // failure this product keeps finding, moved down a layer — the file is
     // sitting right there and the tool says "nothing has changed".
     if (LOOKS_LIKE_AN_EXPORT.some((re) => re.test(filename))) {
-      return { kind: 'broken', error: e.message || String(e) };
+      out.push({ path, size: 0, kind: 'broken', error: e.message || String(e) });
     }
-    return null;
+    return;
+  }
+  try {
+    const kind = classify(archive.names(), filename);
+    if (kind) out.push({ path, size: archive.size || 0, kind });
   } finally {
-    if (zip) zip.close();
+    archive.close();
+  }
+}
+
+/**
+ * How far below Downloads and Desktop an unpacked export may sit.
+ *
+ * One level below the folder itself is where OpenAI's own delivery lands; the
+ * recursion allows one wrapper folder beyond that, for the person who unzipped
+ * by hand into somewhere of their own choosing. Each level costs one `readdir`
+ * per folder and opens nothing, so it is cheap — but it is bounded, because
+ * "search this disk for an export" is a different product.
+ */
+const MAX_EXPORT_DEPTH = 1;
+
+function scanForExports(dir, depth, out) {
+  if (depth < 0) return;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const e of entries) {
+    const p = join(dir, e.name);
+    if (e.isFile()) {
+      if (/\.zip$/i.test(e.name)) take(p, e.name, out);
+      continue;
+    }
+    if (!e.isDirectory()) continue;
+
+    // A folder whose OWN listing carries a conversations file is an export.
+    // Deciding that off the shallow listing is what keeps this affordable:
+    // nothing is opened, walked or parsed until a folder has announced itself.
+    let inside;
+    try {
+      inside = readdirSync(p);
+    } catch {
+      continue;
+    }
+    if (inside.some(isConversationsPart)) take(p, e.name, out);
+    // An export does not contain another export, so this only descends into
+    // folders that are not one.
+    else scanForExports(p, depth - 1, out);
   }
 }
 
 export function findExports() {
-  const dirs = [join(HOME, 'Downloads'), join(HOME, 'Desktop')];
   const out = [];
-  for (const d of dirs) {
+  for (const d of [join(HOME, 'Downloads'), join(HOME, 'Desktop')]) {
     if (!existsSync(d)) continue;
-    let entries;
-    try {
-      entries = readdirSync(d);
-    } catch {
-      continue;
-    }
-    for (const f of entries) {
-      if (!/\.zip$/i.test(f)) continue;
-      const p = join(d, f);
-      let size;
-      try {
-        size = statSync(p).size;
-      } catch {
-        continue;
-      }
-      const kind = sniff(p, f);
-      if (!kind) continue;
-      if (typeof kind === 'object') out.push({ path: p, size, kind: 'broken', error: kind.error });
-      else out.push({ path: p, size, kind });
-    }
+    scanForExports(d, MAX_EXPORT_DEPTH, out);
   }
   return out;
 }
@@ -255,6 +305,67 @@ export function readConfig() {
   return s.status === 'ok' ? s.config : null;
 }
 
+/** The brain this machine points at, or null. The pointer only, no guessing. */
+export function pointedVault() {
+  const cfg = readConfig();
+  return cfg?.vault && existsSync(cfg.vault) ? cfg.vault : null;
+}
+
+/**
+ * Which brain a COMMAND should act on.
+ *
+ * `--at` names a brain OUTRIGHT and wins over the pointer. That is the whole
+ * reason the flag exists: a wrong or unreadable pointer must not be able to send
+ * a command at a brain the user did not name, and it is how you keep working
+ * while that file is being repaired.
+ *
+ * It is deliberately NOT a fallback. A path holding no brain resolves to null
+ * and the caller says so, naming the path — it never quietly degrades into the
+ * pointer's brain, because acting on a brain somebody did not name is the exact
+ * failure the flag exists to prevent. `read --at ~/typo --search x` used to
+ * answer "nothing in the brain matches", which is a retrieval failure wearing
+ * the shape of an answer.
+ *
+ * The default-path fallback at the end is not the same question and is why this
+ * is not `detect().vault`: with the pointer file simply missing, a brain sitting
+ * at `~/brain` is still readable, and reading the right brain is a safe way to
+ * be wrong. `detect` deliberately does not do this — see there.
+ */
+export function resolveVault(at) {
+  const asked = expandPath(at);
+  if (asked) return isVault(asked) ? asked : null;
+  return pointedVault() ?? (existsSync(DEFAULT_VAULT) ? DEFAULT_VAULT : null);
+}
+
+/**
+ * One error for "you named somewhere, and there is no brain there".
+ *
+ * Shared for the same reason `brokenConfig` is: every command that takes `--at`
+ * can be handed a path that is not a brain, and the wrong thing to do is
+ * identical in all of them — carry on against a different brain. It names the
+ * path they gave AND the one this machine points at, because the useful next
+ * move is almost always the second one.
+ *
+ * `retry` is the caller's OWN command rebuilt without the flag, and it is a
+ * parameter rather than `exposurie <name>` because two of the three callers take
+ * required arguments: `RUN: exposurie decline` on its own is a usage error, so
+ * printing it would answer a broken command with another one. Rule 3 asks for
+ * the exact argv, and the only code that can produce it is the code that was
+ * handed the arguments.
+ */
+export function noBrainAt(asked, pointed, retry) {
+  return {
+    message:
+      `You named ${tilde(asked)} with --at and there is no brain there. Nothing ` +
+      `was read and nothing was written. \`--at\` names a brain outright, so it is ` +
+      `never quietly replaced by the one this machine points at — running against ` +
+      `a brain you did not name is what this flag exists to prevent.`,
+    fix: pointed
+      ? `RUN: ${retry}   (the same thing without --at, against ${tilde(pointed)})`
+      : `RUN: exposurie scaffold --at ${asked}   (this machine has no brain anywhere yet)`,
+  };
+}
+
 /**
  * One error, shared by every command that would otherwise act on a wrong
  * assumption. It names the file, says what is wrong with it, and states the
@@ -304,7 +415,7 @@ export function retentionDays() {
 }
 
 /** One call, everything a command needs to decide what to print. */
-export function detect() {
+export function detect({ at } = {}) {
   const exports = findExports();
   const clients = CLIENTS.map((c) => {
     const present = existsSync(c.root);
@@ -316,7 +427,18 @@ export function detect() {
 
   const cfg = configState();
   const config = cfg.config;
-  const vault = config?.vault && existsSync(config.vault) ? config.vault : null;
+
+  // `--at` wins over the pointer, and does not fall back to it — see
+  // `resolveVault`. Two call sites passed `{ at }` here for the whole life of
+  // the product while this function took no arguments at all, so `decline` and
+  // `uninstall` accepted the flag, discarded it, and acted on the pointer's
+  // brain: `uninstall --at <anywhere>` printed "YOUR BRAIN IS UNTOUCHED" over a
+  // path the user had not named. Passing an argument to a function that takes
+  // none is silent in JavaScript, which is why it survived tests that all
+  // happened to point `--at` at the same brain the pointer named.
+  const askedVault = expandPath(at);
+  const pointed = pointedVault();
+  const vault = askedVault ? (isVault(askedVault) ? askedVault : null) : pointed;
 
   return {
     home: HOME,
@@ -330,6 +452,10 @@ export function detect() {
     configStatus: cfg.status,
     configError: cfg.status === 'unreadable' ? cfg : null,
     vault,
+    // What they NAMED, kept apart from what was found, so a caller can tell
+    // "you named somewhere empty" from "this machine has no brain".
+    askedVault,
+    pointedVault: pointed,
     // Only what we can actually parse counts toward the number we promise on.
     sessions: clients.filter((c) => c.readable).reduce((n, c) => n + c.count, 0),
   };

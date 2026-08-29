@@ -171,6 +171,63 @@ top of its output. The failure being prevented is not "the user was never asked"
 
 ---
 
+## `--help`
+
+`--help` is a **question**, and a question never performs an action. It is
+answered by the dispatcher before any command runs, so `exposurie <anything>
+--help` prints the same help and leaves the machine byte-for-byte as it found
+it.
+
+It used to be consulted only when no command was named, so the name won and the
+flag was parsed and then dropped — `exposurie sync --help` staged a real batch,
+and the agent that asked had to go and clean up work it never meant to start.
+Asking what a command does cost the user the command. Answering before dispatch
+means a command added later cannot reintroduce this by forgetting to check a
+flag.
+
+One thing deliberately does **not** get this treatment: a name that is not a
+command is still `USAGE`, flag or no flag. Exit `0` with a help page would tell
+an agent its typo worked, and the error already names every command there is —
+which is the answer to the question it was asking.
+
+---
+
+## `--at`
+
+`--at <path>` names a brain **outright**, and it wins over the pointer. That is
+the whole reason the flag exists: a wrong or unreadable pointer must not be able
+to send a command at a brain the user did not name, and it is how somebody keeps
+working while that file is being repaired.
+
+It is deliberately **not a fallback**. A path holding no brain is refused, by
+name, at `USAGE` — it never quietly degrades into the pointer's brain, because
+acting on a brain nobody named is the failure the flag exists to prevent. The
+refusal names both paths and prints the caller’s own command rebuilt without the
+flag, so the next step is one line.
+
+This was broken for the life of the product, in silence. `detect()` took no
+arguments while `decline` and `uninstall` both called it as `detect({ at })`, and
+`sync` never forwarded the flag at all, so three commands accepted a path and
+acted on a different brain. The sharpest symptom was in `read`:
+`read --at ~/typo --search x` answered *"Nothing in the brain matches. Say so
+plainly; do not answer from memory."* at exit `0`, having never opened a brain.
+**A retrieval failure that succeeds is the worst output this tool can produce.**
+
+Two commands deliberately do not follow the rule, and both look like the bug from
+outside:
+
+- **`init` and `scaffold` call `detect()` with no argument.** They ask the other
+  question — which brain already *exists* — because one brain per person is
+  enforced against the pointer, not against a flag. Honouring `--at` there would
+  make `d.vault` equal the asked path and the second-brain guard could never fire.
+- **`uninstall` never refuses.** Leaving must always finish. `--at` there only
+  decides which folder gets *named*; nothing is read from it or written to it, so
+  refusing over a wrong path would strand our blocks in somebody’s client files at
+  the exact moment they asked to be rid of them. It says the path was empty and
+  gets on with it.
+
+---
+
 ## `--json`
 
 Every command that returns data supports `--json`. Default output stays prose,
@@ -188,3 +245,6 @@ braces and quotes. JSON is for programmatic callers, not for the agent.
 3. Anything a person must do goes in the `STEPS` catalog in `pending.js` — never
    inline, so all human-facing wording stays reviewable in one place.
 4. Add a test that pins whatever rule your command could break.
+5. If it acts on a brain, resolve it through `detect({ at })` or `resolveVault(at)`
+   — never off the pointer directly, or `--at` becomes a flag you accept and
+   ignore. That is not hypothetical: see `--at` above.
