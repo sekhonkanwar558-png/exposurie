@@ -180,7 +180,7 @@ export function init({ at } = {}) {
         `Install it before scaffolding: the brain is reached from every project ` +
         `through a one-line pointer that names this command, and retrieval is ` +
         `the whole product. This is the only install step, and ` +
-        `\`exposurie uninstall\` reverses all of it.`,
+        `\`${install.invocation} uninstall\` reverses all of it.`,
     });
   }
   // Never offer scaffold while the pointer is broken: it is the one command

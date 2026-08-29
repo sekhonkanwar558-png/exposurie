@@ -146,10 +146,15 @@ export function helpText() {
     '  exact command that opens that section. You never have to build one.',
     '',
     'LEAVING',
-    '  exposurie uninstall     takes the tool back off this machine. Your brain',
-    '                          stays where it is, in plain Markdown, and nothing',
-    '                          in it needs this tool to be read. Type it yourself;',
-    '                          it does not need an agent.',
+    // Resolved, never the bare name, and on a line of its own rather than in a
+    // padded column: the npx form is 24 characters where `exposurie` is 9, so a
+    // hand-aligned block would come apart on exactly the machine that needs the
+    // longer one. This is the ONE command in the product typed by a person with
+    // no agent to notice "command not found" for them.
+    `  ${installState().invocation} uninstall`,
+    '      Takes the tool back off this machine. Your brain stays where it is,',
+    '      in plain Markdown, and nothing in it needs this tool to be read.',
+    '      Type it yourself; it does not need an agent.',
     '',
     'NOTHING HERE EVER PROMPTS. Every command runs to completion and exits.',
     'Exit 10 means a step needs a person — it does NOT mean anything failed.',

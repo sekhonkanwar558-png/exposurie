@@ -205,3 +205,69 @@ test('uninstall states which of the two cases is actually true here', () => {
   assert.match(viaNpx, /Nothing to remove/);
   assert.ok(!viaNpx.includes(UNINSTALL), 'never print a removal line for a package that is not there');
 });
+
+// ==========================================================================
+// Leaving must name a command that EXISTS on the machine being left
+// ==========================================================================
+//
+// Defect 3 of the first outside install was the pointer naming `exposurie` on
+// a machine where the documented install was npx, which leaves no such command
+// behind. That was fixed in reach.js and NOWHERE ELSE, so the same literal
+// stayed in the output of `init`, `scaffold` and `help` -- including in the one
+// sentence that promises the whole thing is reversible.
+//
+// It is worse here than it was in the pointer, for one reason. Everywhere else
+// an agent reads the output, and an agent that has just run the tool knows the
+// invocation that worked and can recover from "command not found". `uninstall`
+// is documented as the user's own -- typed by a person, in a terminal, with no
+// agent involved -- so a name that does not resolve has nobody to notice it,
+// at the exact moment somebody has decided to stop trusting the tool.
+
+test('nothing tells an npx user to type a command they do not have', () => {
+  const h = mkdtempSync(join(tmpdir(), 'exposurie-leaving-'));
+  mkdirSync(join(h, '.claude'), { recursive: true });
+
+  // A machine where nothing installed exposurie. installState() scans PATH, so
+  // removing the npm directory from it is the whole simulation.
+  const bare = {
+    ...process.env,
+    HOME: h,
+    USERPROFILE: h,
+    PATH: dirname(process.execPath),
+    Path: dirname(process.execPath),
+  };
+  const run = (args) => {
+    try {
+      return execFileSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env: bare });
+    } catch (e) {
+      return (e.stdout || '') + (e.stderr || '');
+    }
+  };
+
+  for (const args of [['init'], ['scaffold'], ['help'], ['uninstall']]) {
+    const out = run(args);
+    assert.ok(
+      !/(^|[^/\w-])exposurie uninstall/.test(out),
+      `exposurie ${args[0]} tells a machine with no install to run "exposurie uninstall":\n${out}`,
+    );
+  }
+});
+
+test('...and the same output on an installed machine says the short form', () => {
+  // Without this the test above passes on a build that never mentions leaving
+  // at all, which would be a worse product and a green suite.
+  const h = mkdtempSync(join(tmpdir(), 'exposurie-leaving-ok-'));
+  mkdirSync(join(h, '.claude'), { recursive: true });
+  const fake = join(h, 'bin');
+  mkdirSync(fake, { recursive: true });
+  writeFileSync(join(fake, process.platform === 'win32' ? 'exposurie.cmd' : 'exposurie'), '', 'utf8');
+
+  const withIt = { ...process.env, HOME: h, USERPROFILE: h, PATH: fake, Path: fake };
+  let out;
+  try {
+    out = execFileSync(process.execPath, [BIN, 'help'], { encoding: 'utf8', env: withIt });
+  } catch (e) {
+    out = (e.stdout || '') + (e.stderr || '');
+  }
+  assert.match(out, /exposurie uninstall/, 'an installed machine should get the short command');
+});

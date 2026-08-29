@@ -581,6 +581,18 @@ One command, and you can type it yourself — no agent involved:
 exposurie uninstall
 ```
 
+If you set up through `npx` and never installed the package, there is no
+`exposurie` on your PATH, so use the form that needs nothing installed:
+
+```bash
+npx -y @sekhon/exposurie uninstall
+```
+
+You should not have to work out which of those you are, and you don't: every
+command that mentions leaving prints the one that works on your machine. This
+is the only command in the product a person types with no agent watching, so it
+is the one place a name that does not resolve has nobody to notice it.
+
 It removes the pointer from every client it was written into, and deletes the
 slash command and the skill. Your own instructions files come back
 **byte-identical** — the block goes, the blank line above it goes, and a file
