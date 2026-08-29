@@ -2,23 +2,30 @@
 //
 // THE FAILURE THIS EXISTS FOR. reach.js writes a pointer into every client's
 // global instructions file, and the pointer's one actionable line names a
-// command. `npx @sekhon/exposurie init` leaves NO command behind: the package
-// lands in a temporary cache and `exposurie` is not on PATH afterwards. So the
-// documented first line a person types produced a pointer naming a command that
-// does not exist — in a file paid for on every message, in every project,
-// forever. Retrieval is the product, and it was dead at rest on the default
-// install path with nothing reporting it.
+// command. A package run out of a temporary cache leaves NO command behind, so
+// the documented first line a person typed produced a pointer naming a command
+// that does not exist — in a file paid for on every message, in every project,
+// forever. Retrieval is the product, and it was dead at rest with nothing
+// reporting it.
 //
 // It was found the only way it could be: a real install on somebody else's
 // machine, where the agent went looking for `exposurie sync` and reported the
 // gap back. Nothing on the developer's own machine could ever have shown it —
 // there, the binary is on PATH for unrelated reasons.
 //
-// THE RULE. The pointer names the invocation that works on THIS machine, and
-// the install path we push is the permanent one. npx stays supported so a
-// pointer is never dead, but it is a fallback rather than the target: `read` is
-// meant to be cheap enough that an agent tries it speculatively, and a cold npx
-// resolve is not cheap. A slow retrieval is a retrieval that stops being tried.
+// THE RULE, and it changed on 2026-08-29. There is exactly one invocation:
+// `exposurie`. The tool used to carry a second, slower one for machines with
+// nothing on PATH, so that a pointer was never dead. That is gone. The
+// invariant it protected is now kept the other way round: **the commands that
+// write a pointer refuse to run until the command they would name exists.**
+// `init` already gated on it; `scaffold` does now too.
+//
+// This is the stronger version of the same promise. A fallback form guarantees
+// the pointer resolves; it does not guarantee the pointer is worth having —
+// every lookup paid a package resolve, and a retrieval that is slow is a
+// retrieval that stops being tried, which is the same failure as a broken one,
+// arriving later. Requiring the install costs one line at setup, once, and
+// after that there is one spelling of every command on every machine forever.
 
 import { statSync } from 'node:fs';
 import { join, delimiter } from 'node:path';
@@ -31,8 +38,8 @@ export const INSTALL = `npm install -g ${PACKAGE}`;
 /** And its exact inverse, for the command whose whole job is being reversible. */
 export const UNINSTALL = `npm uninstall -g ${PACKAGE}`;
 
-/** What the pointer says when there is no binary to name. Never dead, just slow. */
-export const NPX_INVOCATION = `npx -y ${PACKAGE}`;
+/** The one invocation. There is no second one, and there must not be. */
+export const INVOCATION = 'exposurie';
 
 /**
  * Windows resolves a bare command name through PATHEXT; POSIX executes the file
@@ -68,61 +75,37 @@ export function onPath(env = process.env, platform = process.platform) {
 }
 
 /**
- * Are we running out of npx's temporary cache right now?
- *
- * npm 7+ unpacks an `npx` run into `<cache>/_npx/<hash>/node_modules/...`, so
- * our own module path carries the answer. `npm_command` is checked as well
- * because a future layout change would break the path test silently, and this
- * is a claim we make to the user about their own setup.
- */
-export function underNpx(env = process.env, selfPath = import.meta.url) {
-  if (/[\\/]_npx[\\/]/.test(String(selfPath))) return true;
-  return env.npm_command === 'exec';
-}
-
-/**
  * The one answer every caller needs, computed in one place.
  *
- * `invocation` is what goes in the pointer. `permanent` is whether this machine
- * has the install we actually want — it is the thing `init` acts on, and the
- * thing `scaffold` reports, so both cannot disagree about it.
+ * `permanent` is whether this machine has the install the product requires. It
+ * is what `init` acts on and what `scaffold` now refuses on, so the two cannot
+ * disagree about it. `invocation` is kept as a field rather than inlined at
+ * forty call sites: it is a fact about the product, and one place to read it is
+ * how it stays that way.
  */
-export function installState(env = process.env, platform = process.platform, selfPath = import.meta.url) {
+export function installState(env = process.env, platform = process.platform) {
   const binary = onPath(env, platform);
-  const npx = underNpx(env, selfPath);
   return {
     binary,
     permanent: Boolean(binary),
-    npx,
-    invocation: binary ? 'exposurie' : NPX_INVOCATION,
+    invocation: INVOCATION,
   };
 }
 
 /** Just the string the pointer should name. */
-export const invocation = (...a) => installState(...a).invocation;
+export const invocation = () => INVOCATION;
 
 /**
- * EVERY command this tool prints, spelled the way it works on THIS machine.
+ * EVERY command this tool prints, in the one spelling there is.
  *
- * `cmd('sync --done')` is `exposurie sync --done` where a binary exists and
- * `npx -y @sekhon/exposurie sync --done` where one does not.
+ * `cmd('sync --done')` is `exposurie sync --done`, everywhere, always.
  *
- * WHY THIS IS A FUNCTION AND NOT A CONSTANT, which is the whole history of the
- * bug it closes. The pointer used to hardcode `exposurie`, while the documented
- * install was `npx` — which leaves no such command behind — so every npx
- * install wrote an instruction naming nothing. That was fixed in reach.js on
- * 2026-08-28 **and nowhere else**, because the fix was made where the bug was
- * reported rather than where it lived. The same literal stayed in thirty-one
- * other places, and surfaced again on 2026-08-29 in `uninstall` — the one
- * command a person types with no agent to notice "command not found" for them.
- *
- * So the rule is now mechanical rather than remembered: **no printed command is
- * ever written as a literal.** A test runs every command on a PATH with no
- * exposurie on it and fails if a bare one appears in any output, which is a
- * property a future command cannot forget to satisfy.
- *
- * It resolves per call rather than being computed once, and that is deliberate:
- * `npm install -g` during a session changes the answer, and a value captured at
- * import would go on printing the slow form for the rest of the run.
+ * WHY THIS IS STILL A FUNCTION now that it resolves nothing. It was the seam
+ * that made "no printed command is ever written as a literal" a mechanical rule
+ * instead of a remembered one, and that rule is what a test can enforce. The
+ * second invocation is gone; the discipline that catches the next one is not.
+ * Thirty-one call sites went on printing a bare literal for a whole release
+ * because the fix was made where the bug was reported rather than where it
+ * lived, and this is the shape that stops that recurring.
  */
-export const cmd = (rest = '') => (rest ? `${invocation()} ${rest}` : invocation());
+export const cmd = (rest = '') => (rest ? `${INVOCATION} ${rest}` : INVOCATION);

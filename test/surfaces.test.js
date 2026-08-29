@@ -11,7 +11,7 @@
 // this specific feature goes wrong quietly:
 //
 //   - naming a command that does not exist on the machine it was written on
-//     (the exact failure that killed retrieval on every npx install),
+//     (the exact failure that killed retrieval for a whole release),
 //   - burying the loop in prose so a backlog drains one batch and stops,
 //   - paying the always-loaded budget twice for a job the pointer already does,
 //   - reaching one directory too far on the way out.
@@ -33,7 +33,6 @@ import {
   COMMAND_NAME,
 } from '../src/surfaces.js';
 import { NAMES } from '../src/commands/names.js';
-import { NPX_INVOCATION } from '../src/install.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = join(ROOT, 'bin', 'exposurie.js');
@@ -110,18 +109,18 @@ test('neither document names a command the tool does not have', () => {
   }
 });
 
-test('the invocation is resolved, never assumed — the npx machine gets the npx form', () => {
+test('the skill and the command name the one invocation', () => {
   // THE failure of the first outside install, one surface over. The pointer
-  // hardcoded `exposurie` while the documented install was npx, which leaves no
-  // such command on PATH: correct prose naming a command that is not there,
-  // erroring never, running never. A skill written the same way fails the same
-  // way, and just as silently.
-  for (const doc of both(NPX_INVOCATION)) {
-    assert.ok(doc.includes(`RUN: ${NPX_INVOCATION} sync`), 'must name the form that works here');
-    assert.ok(
-      !/RUN:\s+exposurie\s/.test(doc),
-      'must not name a bare exposurie on a machine that has none',
-    );
+  // named a command that was not on PATH: correct prose naming a command that
+  // is not there, erroring never, running never. A skill written the same way
+  // fails the same way, and just as silently.
+  //
+  // Since 2026-08-29 there is one spelling and `scaffold` refuses to write any
+  // of these until it resolves, so what is pinned here is that the files say
+  // the one thing they are allowed to say.
+  for (const doc of both('exposurie')) {
+    assert.ok(doc.includes('RUN: exposurie sync'), 'must name the sync command');
+    assert.ok(!/npx/i.test(doc), 'the second invocation is gone and must stay gone');
   }
 });
 

@@ -21,7 +21,6 @@ import { detect, tilde, configPath, brokenConfig } from '../context.js';
 import { installState, INSTALL, cmd } from '../install.js';
 import { reachAll, pointer } from '../reach.js';
 import { surfacesAll, COMMAND_NAME } from '../surfaces.js';
-import { NAMES } from './names.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
@@ -130,32 +129,6 @@ function initGit(vault) {
   }
 }
 
-/**
- * Spell the commands inside a copied template the way they work HERE.
- *
- * The templates are written once and **never overwritten** — that is the whole
- * ownership promise — so a command baked into one is baked in for good. On a
- * machine set up through `npx` there is no `exposurie` on PATH, and
- * `.exposurie/sync.md` is the file the user's agent is sent to on every sync:
- * the single worst place in the brain for a command that does not run.
- *
- * It degrades in the safe direction, which is why baking is acceptable at all.
- * The npx form keeps working forever, including after the user installs
- * properly — it is only slower. The bare form does not work at all on the
- * machine that needed the other one. So when the two disagree, writing the
- * long one costs a package resolve and writing the short one costs the file.
- *
- * The `[^/]` guard is not decoration: the npx invocation ENDS in the word
- * `exposurie` (`npx -y @sekhon/exposurie`), so a rule that matched the package
- * name too would rewrite its own output on a second pass.
- */
-const COMMAND_WORD = new RegExp(`(^|[^\\w/@-])exposurie (${NAMES.join('|')})\\b`, 'g');
-
-export function localise(text, invocation) {
-  if (invocation === 'exposurie') return text;
-  return text.replace(COMMAND_WORD, (_m, before, name) => `${before}${invocation} ${name}`);
-}
-
 /** Write a file only if it is absent. Returns true when it actually wrote. */
 function writeIfAbsent(path, text) {
   if (existsSync(path)) return false;
@@ -201,6 +174,50 @@ export function scaffold({ at } = {}) {
     };
   }
 
+  // THE INSTALL GATE. scaffold writes a pointer into every client's global
+  // instructions naming the command that reads the brain, plus a skill and a
+  // slash command that name it too — so that command has to be one that still
+  // exists tomorrow. It used to be allowed to name a slower fallback form
+  // instead, which meant scaffold could always proceed. That form is gone as of
+  // 2026-08-29, so the guarantee moves here: rather than writing a pointer that
+  // resolves slowly, we decline to write one at all until the real command is
+  // on PATH.
+  //
+  // It is HUMAN and not ERROR, and the distinction is the whole output
+  // contract: nothing failed and nothing is broken. One line typed by a person
+  // is outstanding, and `init` has been saying so first for a release already.
+  // Refusing here is what makes that step load-bearing rather than advisory.
+  const install = installState();
+  if (!install.permanent) {
+    return {
+      code: HUMAN,
+      state: { vault: null, self: 'scaffold' },
+      body: [
+        'NOT INSTALLED — nothing was written',
+        ...wrap(
+          `There is no exposurie command on this PATH, and scaffold's whole job ` +
+            `is writing files that name one: a pointer into every client's ` +
+            `global instructions, a skill, and a slash command. Written now they ` +
+            `would be correct prose naming a command that is not there — no ` +
+            `error, ever, and retrieval simply never happens.`,
+          74,
+          '  ',
+        ),
+        '',
+        '  ONE LINE, AND IT IS THE ONLY INSTALL STEP',
+        `      RUN: ${INSTALL}`,
+        '',
+        ...wrap(
+          `Then run scaffold again. Everything it writes is reversible in one ` +
+            `command a person can type, which leaves their own files ` +
+            `byte-identical and never touches the brain.`,
+          74,
+          '  ',
+        ),
+      ],
+    };
+  }
+
   const fresh = !isVault(target);
   const v = version();
   const seam = readSeam(target) || seamDefaults(v);
@@ -212,13 +229,8 @@ export function scaffold({ at } = {}) {
   const kept = [];
   const copied = { ...(seam.copied || {}) };
 
-  // Resolved before the copy loop rather than at the pointer below, because the
-  // templates need it too: a command baked into a file we never overwrite is
-  // baked in for good. See localise().
-  const install = installState();
-
   for (const [src, dest, what] of COPY) {
-    const text = localise(readFileSync(join(TEMPLATES, src), 'utf8'), install.invocation);
+    const text = readFileSync(join(TEMPLATES, src), 'utf8');
     if (writeIfAbsent(join(target, dest), text)) {
       created.push([slash(dest), `${what} — yours now`]);
       // Record what we wrote and what it looked like, so a later version can
@@ -268,9 +280,9 @@ export function scaffold({ at } = {}) {
   // only loads inside the brain folder — and nobody works there. Without this,
   // a user's agent sitting in a code repo has no idea a brain exists.
   //
-  // The invocation is resolved rather than assumed. Writing a pointer that
-  // names `exposurie` on a machine where nothing installed it is how retrieval
-  // died silently on every npx install — the file is correct prose naming a
+  // The pointer names `exposurie`, and the gate above is what earns the right
+  // to write that unconditionally. A pointer naming a command nothing installed
+  // is how retrieval died silently for a whole release — correct prose naming a
   // command that is not there, so it never errors and never runs.
   const reach = reachAll({ text: pointer(install.invocation) });
 
@@ -282,9 +294,9 @@ export function scaffold({ at } = {}) {
   // skip-if-absent rule, on the opposite side of the context budget — the
   // reasoning is in surfaces.js.
   //
-  // It takes the resolved invocation for the same reason the pointer does: a
-  // file naming `exposurie` on a machine where nothing installed it is correct
-  // prose naming a command that is not there, and it fails by never running.
+  // It takes the same invocation for the same reason the pointer does: a file
+  // naming `exposurie` on a machine where nothing installed it is correct prose
+  // naming a command that is not there, and it fails by never running.
   const surf = surfacesAll({ vault: target, cmd: install.invocation });
 
   const open = unresolved(stepCtx(d, target), [
@@ -336,26 +348,6 @@ export function scaffold({ at } = {}) {
     ...block('', [['names', `${install.invocation} read --search "<topic>"`]]).filter(
       (l) => l.trim() !== '',
     ),
-    // Said out loud rather than left as a slow surprise. The npx form works —
-    // that is the point of writing it — but it pays a package resolve on every
-    // lookup, and the pointer's whole bet is that `read` is cheap enough for an
-    // agent to try speculatively. A retrieval that is slow is a retrieval that
-    // stops being tried, which is the same failure as a broken one, later.
-    ...(install.permanent
-      ? []
-      : [
-          '',
-          ...wrap(
-            `That is the fallback form, because nothing on this machine installed ` +
-              `an exposurie command. It works and it is not fast — every lookup ` +
-              `re-resolves the package. Fix it in one line and the pointer ` +
-              `shortens itself on the next sync:`,
-            74,
-            '  ',
-          ),
-          `      RUN: ${INSTALL}`,
-          '',
-        ]),
     ...wrap(
       'A few hundred bytes per client, between exposurie markers, appended to a ' +
         'file that otherwise belongs to the user. The schema stays in the brain. ' +
@@ -436,7 +428,7 @@ export function scaffold({ at } = {}) {
       kept: kept.map(([f]) => f),
       git: gitStatus,
       config: configPath(),
-      install: { permanent: install.permanent, npx: install.npx, invocation: install.invocation },
+      install: { permanent: install.permanent, invocation: install.invocation },
       reach: reach.map((c) => ({ id: c.id, file: c.file, action: c.action, verified: c.verified })),
       surfaces: surf.map((c) => ({
         id: c.id,

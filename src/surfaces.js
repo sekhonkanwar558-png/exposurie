@@ -17,10 +17,10 @@
 // the pointer that named a missing command, and left the missing command.
 //
 // It was not buildable before that fix either, which is the part worth keeping.
-// A skill body's one useful line is `RUN: exposurie sync`, and under the
-// documented `npx` install nothing of that name is on PATH — so a skill written
-// then would have failed exactly the way the pointer did: correct prose naming
-// a command that is not there, erroring never, running never. Making the
+// A skill body's one useful line is `RUN: exposurie sync`, and for a whole
+// release the documented way in left nothing of that name on PATH — so a skill
+// written then would have failed exactly the way the pointer did: correct prose
+// naming a command that is not there, erroring never, running never. Making the
 // permanent install the documented path is what made this surface possible.
 //
 // THE DIVISION OF LABOUR, so no two of the three do the same job:

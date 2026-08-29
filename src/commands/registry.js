@@ -83,9 +83,9 @@ export { NAMES };
  *
  * WHAT IT SAYS BEYOND THE NUMBER, and why it is not padding. The question
  * behind "what version am I on" is almost always "do I have the fix", and the
- * single most useful neighbouring fact is whether this copy is INSTALLED or is
- * a temporary npx unpack — because that is what decides whether the pointer in
- * their agent names a command that exists. It is the one piece of information
+ * single most useful neighbouring fact is whether this copy is really INSTALLED
+ * — because that is what decides whether setup can write a pointer at all. It
+ * is the one piece of information
  * that would have shortened the first outside install, printed at the moment
  * somebody is already asking about their copy of the tool.
  *
@@ -106,10 +106,9 @@ export function versionResult(at) {
       ...(install.permanent
         ? [`  Installed on this machine at ${install.binary}`]
         : [
-            '  NOT installed here — this is running from a temporary npx cache,',
-            '  so no exposurie command is on PATH. That matters more than it',
-            '  sounds: the pointer written into your agent names a command, and',
-            '  it names the slow fallback until a real install lands.',
+            '  NOT installed here — no exposurie command is on PATH. That matters',
+            '  more than it sounds: the pointer written into your agent names this',
+            '  command, so setup will not write one until it exists.',
             '',
             `      RUN: ${INSTALL}`,
           ]),
@@ -122,6 +121,20 @@ export function helpText() {
   const w = Math.max(...NAMES.map((n) => n.length));
   return [
     'exposurie — an external brain your coding agent builds, curates and reads.',
+    // There is ONE spelling of every command here, so on a machine that has not
+    // installed the package yet, every line below names something that will not
+    // run. The tool used to translate them into a slower form instead; since
+    // 2026-08-29 it does not, so it has to say so once, at the top, rather than
+    // handing somebody a page of commands that all fail.
+    ...(installState().permanent
+      ? []
+      : [
+          '',
+          'NOT INSTALLED HERE — nothing named exposurie is on this PATH, so the',
+          'commands below name something that will not run yet. One line fixes it,',
+          'and setup will not write anything into your agent until it does:',
+          `    ${INSTALL}`,
+        ]),
     '',
     'COMMANDS',
     ...NAMES.map((n) => `  ${n.padEnd(w)}  ${COMMANDS[n].summary}`),
@@ -136,9 +149,10 @@ export function helpText() {
     '  --because "..." (decline) what your user actually said',
     '',
     'READING',
-    // Resolved, and laid out down the page rather than in a padded column: the
-    // npx form is 24 characters where `exposurie` is 9, so a hand-aligned block
-    // comes apart on exactly the machine that needs the longer one.
+    // Laid out down the page rather than in a padded column. A hand-aligned
+    // block was worth abandoning when a second, longer invocation existed; it
+    // stays abandoned because the layout should not depend on that never
+    // coming back.
     ...[
       ['"<page>"', 'the page, or a map if large'],
       ['"<page>" --section "<name>"', 'one section of it'],
@@ -151,10 +165,9 @@ export function helpText() {
     '  exact command that opens that section. You never have to build one.',
     '',
     'LEAVING',
-    // Resolved, never the bare name, and on a line of its own rather than in a
-    // padded column: the npx form is 24 characters where `exposurie` is 9, so a
-    // hand-aligned block would come apart on exactly the machine that needs the
-    // longer one. This is the ONE command in the product typed by a person with
+    // Built through cmd() rather than written as a literal, and on a line of
+    // its own rather than in a padded column.
+    // This is the ONE command in the product typed by a person with
     // no agent to notice "command not found" for them.
     `  ${cmd('uninstall')}`,
     '      Takes the tool back off this machine. Your brain stays where it is,',

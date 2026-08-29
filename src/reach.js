@@ -17,7 +17,7 @@
 // vendor's process, spawned by their app, in an environment we cannot inspect —
 // so a stranger's bug report is unreproducible and therefore unfixable. This
 // fails, if it fails at all, as prose in a file that nothing parses. No
-// restart, no child process, no `npx`-not-found. We own the whole failure path.
+// restart, no child process, no command-not-found. We own the whole failure path.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -54,12 +54,12 @@ export const END = '<!-- exposurie:end -->';
 // discounted as injection-shaped. What measured 6/6 was a conditional trigger,
 // so the trigger is what got sharpened rather than the tone.
 //
-// THE COMMAND IT NAMES MUST EXIST. That sounds obvious and it was not: the
-// pointer hardcoded `exposurie`, while the documented first line a person types
-// is `npx @sekhon/exposurie init`, which leaves no such command on PATH. Every
-// npx install therefore wrote an instruction naming nothing, into the one file
-// that loads on every message forever — and it failed silently, because prose
-// naming a missing command does not error, it just never gets run. So the
+// THE COMMAND IT NAMES MUST EXIST. That sounds obvious and it was not: for a
+// whole release the documented way in left no `exposurie` on PATH, so setup
+// wrote an instruction naming nothing into the one file that loads on every
+// message forever — and it failed silently, because prose naming a missing
+// command does not error, it just never gets run. `scaffold` now refuses to
+// write this file at all until the command is really there. So the
 // invocation is now resolved against the machine (see install.js) rather than
 // assumed, and `reachAll` defaults to the resolved one so a caller that forgets
 // to pass it still writes something that works.

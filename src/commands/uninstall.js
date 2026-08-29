@@ -123,10 +123,9 @@ export function uninstall({ at } = {}) {
     body.push('  No brain found on this machine — there was nothing to keep.');
   }
 
-  // Say which of the two is actually true on this machine rather than
-  // describing both and leaving the person to work out which one they are. The
-  // old text led with npx as though it were the normal case; it is not, and
-  // guessing wrong here means someone believes they have uninstalled a package
+  // Say what is actually true on this machine rather than describing every way
+  // it could have got here and leaving the person to work out which one they
+  // are. Guessing wrong means someone believes they have uninstalled a package
   // that is still on their PATH.
   const install = installState();
   body.push(
@@ -144,8 +143,8 @@ export function uninstall({ at } = {}) {
           `      ${UNINSTALL}`,
         ]
       : wrap(
-          `Nothing to remove — this was run from a temporary npx cache, so no ` +
-            `exposurie command was ever installed here.`,
+          `Nothing to remove — there is no exposurie command on this PATH, so ` +
+            `the package was never installed here.`,
           74,
           '  ',
         )),

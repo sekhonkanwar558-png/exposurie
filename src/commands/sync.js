@@ -953,9 +953,9 @@ export function sync({ done: isDone, abort: isAbort, at } = {}) {
   mirror(d.vault, unresolved(stepCtx(d)));
 
   // Same argument, applied to the pointer. It is written once at scaffold, and
-  // scaffold is typed once — so a brain scaffolded under npx keeps a pointer
-  // naming the slow fallback forever, including after the user does the one
-  // thing we asked and installs the package properly. And a client installed
+  // scaffold is typed once — so a pointer written by an older release keeps
+  // whatever it said then, forever, however the machine has changed since. And
+  // a client installed
   // after setup is never reached at all, because nothing revisits the question.
   //
   // inject() compares bytes and reports `unchanged` without writing, so on the
@@ -964,8 +964,8 @@ export function sync({ done: isDone, abort: isAbort, at } = {}) {
 
   // And the same for the skill and the slash command, which are written at
   // scaffold for exactly the same reasons and go stale in exactly the same two
-  // ways — an invocation that was npx when they were written, and a brain that
-  // has since moved.
+  // ways — an invocation spelled the way an older release spelled it, and a
+  // brain that has since moved.
   //
   // The second half of that argument is the stronger one here. A client the
   // user installs AFTER setup gets no pointer until this line runs, and it gets

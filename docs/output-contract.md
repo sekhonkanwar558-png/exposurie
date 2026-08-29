@@ -53,27 +53,37 @@ a test greps every plan the tool can print and asserts each named command is in
 it. Where the build genuinely stops, output says so in words instead of naming
 a command that would fail.
 
-### 3c. Spell the command the way it works on THIS machine
+### 3c. There is one command name, and setup refuses until it exists
 
 The sibling of 3b, and the one that has been broken three times.
 
 `exposurie sync` is the right thing to print on a machine where the package is
-installed and **the wrong thing everywhere else** — `npx` leaves no command on
-PATH, so the line names nothing and fails by never running. A correct command
-for the wrong machine is indistinguishable, on the page, from a correct one.
+installed and **the wrong thing everywhere else** — with nothing on PATH the
+line names nothing and fails by never running. A correct command for the wrong
+machine is indistinguishable, on the page, from a correct one.
 
-So **no printed command is ever written as a literal.** They all go through
-`cmd()` in `src/install.js`, which resolves against PATH per call:
+There were two possible answers, and the product has now given both. Until
+2026-08-29 it carried a **second, longer invocation** and printed whichever one
+resolved. That guaranteed the line ran; it did not guarantee the line was worth
+running, since every lookup then paid a package resolve — and a retrieval that
+is slow is a retrieval that stops being tried, which is the same failure
+arriving later.
+
+**The answer now is one name, and a refusal.** `exposurie` is the only spelling,
+everywhere, on every machine. `scaffold` will not write the pointer, the skill
+or the slash command until that command is really on PATH: it exits `10`, writes
+nothing, and names the one install line. `init` reports the same thing first.
+
+Commands still go through `cmd()` in `src/install.js` rather than being written
+as literals:
 
 ```js
-cmd('sync --done')   // "exposurie sync --done"
-                     // "npx -y @sekhon/exposurie sync --done"
+cmd('sync --done')   // "exposurie sync --done", always
 ```
 
-That includes the files copied into the user's brain, which `scaffold` runs
-through `localise()` on the way in — those are written once and never
-overwritten, so a wrong command in `.exposurie/sync.md` is wrong for the life
-of the brain.
+`cmd()` no longer resolves anything, and it is kept anyway — it is the seam that
+makes *no printed command is a literal* a mechanical rule a test can enforce
+rather than a habit anyone has to remember.
 
 **Why this is a rule and not a habit.** It was fixed in `reach.js` on
 2026-08-28, where the bug was reported, and the same literal stayed in
@@ -81,10 +91,11 @@ thirty-three other places. It came back on 2026-08-29 in `uninstall` — the one
 command a person types with no agent to notice "command not found" for them.
 Fixing the reported site and not the class is what makes a bug recur.
 
-It is now a property test rather than a review item: `test/invocation.test.js`
-runs every command on a PATH with no exposurie on it and fails if any output,
-or any file written into the brain, names a bare one. A site added later is
-covered without anyone remembering this page exists.
+It is now a property test rather than a review item. `test/invocation.test.js`
+asserts three things: `scaffold` on a bare PATH writes **nothing**; every
+command that must name one names `exposurie`; and no output, and no file written
+into the brain, ever contains a second invocation form again. A site added later
+is covered without anyone remembering this page exists.
 
 > Two of those sites were invisible to a source grep — `` `exposurie ${DECLINE}` ``
 > builds the name from a variable, and `bin/` is not `src/`. The test looks at

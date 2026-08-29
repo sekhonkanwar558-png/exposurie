@@ -1,6 +1,6 @@
 
 // ==========================================================================
-// THE GUARD: no output ever names a command the machine does not have
+// THE GUARD: one invocation, and setup refuses rather than naming a dead one
 // ==========================================================================
 //
 // This is defect 3 of the first outside install, and by 2026-08-29 it had
@@ -11,29 +11,39 @@
 // lived, so each fix was correct and the class survived it. What was missing
 // was never care -- it was a check that does not depend on anyone remembering.
 //
-// So this asserts a PROPERTY of the whole product rather than a list of sites:
-// run every command on a PATH with no exposurie on it, and no line of any
-// output may name a bare `exposurie <command>`. A site added next year is
-// covered without anyone thinking of it, which is the only kind of guard worth
-// having for a mistake that has now been made three times.
+// HOW THE PROPERTY CHANGED, 2026-08-29. The old guard ran every command on a
+// PATH with nothing installed and asserted that no line named a bare
+// `exposurie <cmd>` -- because a second, slower invocation existed to be named
+// instead. That second form is gone. There is one spelling of every command on
+// every machine, so "which form did it print" is no longer a question a test
+// can ask.
+//
+// The invariant underneath it is unchanged and is now asserted directly: NO
+// FILE IS EVER WRITTEN NAMING A COMMAND THE MACHINE DOES NOT HAVE. It is kept
+// by refusing instead of by translating -- `scaffold` declines on a bare PATH
+// and writes nothing at all. That is a stronger claim than the old one and a
+// much easier one to check.
+//
+// And the second guard here exists because the removal is the kind that gets
+// quietly undone: nothing this product prints, or writes into a brain, may
+// contain the string `npx` ever again.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, utimesSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, utimesSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { NAMES } from '../src/commands/names.js';
-import { localise } from '../src/commands/scaffold.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = join(ROOT, 'bin', 'exposurie.js');
 
 /**
  * A bare `exposurie <cmd>`, not preceded by `/` or `@` -- so the PACKAGE name
- * (`npx -y @sekhon/exposurie sync`) never matches and the check stays honest.
+ * never matches and the check stays honest.
  *
  * String.raw, and that is not a style choice. Written as an ordinary template
  * literal this reads `` `(^|[^\w/@-])exposurie (...)\b` ``, where `\w` is an
@@ -81,11 +91,28 @@ function bare(h) {
   return { ...process.env, HOME: h, USERPROFILE: h, PATH: dirname(process.execPath), Path: dirname(process.execPath) };
 }
 
+/**
+ * And the same machine after the one install step.
+ *
+ * A real file, because onPath() stats it -- the cheap version of that check
+ * returned a false positive on a DIRECTORY named exposurie, so a fixture that
+ * is not a file would be testing the bug rather than the fix.
+ */
+function installed(h) {
+  const dir = join(h, 'fakebin');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, process.platform === 'win32' ? 'exposurie.cmd' : 'exposurie'), '', 'utf8');
+  const env = bare(h);
+  const sep = process.platform === 'win32' ? ';' : ':';
+  const PATH = `${dir}${sep}${env.PATH}`;
+  return { ...env, PATH, Path: PATH };
+}
+
 function run(env, args) {
   try {
-    return execFileSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env });
+    return { out: execFileSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env }), code: 0 };
   } catch (e) {
-    return (e.stdout || '') + (e.stderr || '');
+    return { out: (e.stdout || '') + (e.stderr || ''), code: e.status };
   }
 }
 
@@ -96,29 +123,42 @@ const CALLS = [
   ['nonsense'], ['--version'], ['scaffold', '--at', '/no/such/place'],
 ];
 
-test('no command, on a machine with no install, ever prints a bare exposurie', () => {
-  const h = home('exposurie-guard-');
-  const env = bare(h);
-  run(env, ['scaffold']); // a brain, so the later calls produce real output
+test('scaffold refuses on a machine with no install, and writes nothing', () => {
+  // The invariant the old guard bought with a second invocation. Buying it by
+  // refusing is stronger: there is no file left to be wrong.
+  const h = home('exposurie-gate-');
+  const r = run(bare(h), ['scaffold']);
 
-  for (const args of CALLS) {
-    const out = run(env, args);
-    const bad = out.split('\n').filter((l) => BARE.test(l));
-    assert.deepEqual(
-      bad,
-      [],
-      `exposurie ${args.join(' ')} named a command this machine does not have:\n  ${bad.join('\n  ')}`,
-    );
+  assert.equal(r.code, 10, 'a missing install is a step for a person, not a failure');
+  assert.match(r.out, /NOT INSTALLED/, 'it has to say why it stopped');
+  assert.match(r.out, /npm install -g @sekhon\/exposurie/, 'and name the one line that fixes it');
+  assert.equal(existsSync(join(h, 'brain')), false, 'nothing may be written before the command exists');
+});
+
+test('nothing this product prints ever contains npx again', () => {
+  // The removal this guard exists to make permanent, on 2026-08-29: one
+  // invocation, everywhere, forever. Checked on BOTH machines, because the
+  // whole point of the old fallback was that it appeared on only one of them.
+  const withBrain = home('exposurie-clean-');
+  const env = installed(withBrain);
+  run(env, ['scaffold']);
+
+  for (const machine of [bare(home('exposurie-clean-bare-')), env]) {
+    for (const args of CALLS) {
+      const { out } = run(machine, args);
+      const bad = out.split('\n').filter((l) => /npx/i.test(l));
+      assert.deepEqual(bad, [], `exposurie ${args.join(' ')} printed npx:\n  ${bad.join('\n  ')}`);
+    }
   }
 });
 
-test('...and the calls that MUST name a command name the resolved one', () => {
-  // Without this, a build that printed no commands at all would pass the test
+test('the calls that MUST name a command name the one invocation', () => {
+  // Without this, a build that printed no commands at all would pass the guards
   // above by saying nothing -- and printing the exact next command is rule 3 of
   // the output contract. Named calls rather than a count, because "10 of 14 is
   // enough" is not a property anyone can reason about later.
-  const h = home('exposurie-guard-live-');
-  const env = bare(h);
+  const h = home('exposurie-live-');
+  const env = installed(h);
   run(env, ['scaffold']);
 
   const MUST = [
@@ -129,20 +169,19 @@ test('...and the calls that MUST name a command name the resolved one', () => {
   ];
 
   for (const [args, why] of MUST) {
-    assert.match(
-      run(env, args),
-      /npx -y @sekhon\/exposurie /,
+    assert.ok(
+      BARE.test(run(env, args).out),
       `exposurie ${args.join(' ')} named no command at all — ${why}`,
     );
   }
 });
 
-test('the files copied into the brain name a command that runs there too', () => {
+test('the files copied into the brain name the command that runs there', () => {
   // sync.md is the file the agent is sent to on EVERY sync, and scaffold never
   // overwrites it -- so a wrong command in there is wrong for the life of the
-  // brain. It is localised at copy time and this reads what actually landed.
-  const h = home('exposurie-guard-tmpl-');
-  run(bare(h), ['scaffold']);
+  // brain. This reads what actually landed on disk rather than the template.
+  const h = home('exposurie-tmpl-');
+  run(installed(h), ['scaffold']);
 
   const brain = join(h, 'brain');
   const walk = (d, acc = []) => {
@@ -155,19 +194,15 @@ test('the files copied into the brain name a command that runs there too', () =>
     return acc;
   };
 
-  for (const f of walk(brain)) {
+  const files = walk(brain);
+  assert.ok(files.length > 0, 'scaffold must actually have written the brain');
+
+  let named = 0;
+  for (const f of files) {
     const text = readFileSync(f, 'utf8');
-    const bad = text.split('\n').filter((l) => BARE.test(l));
-    assert.deepEqual(bad, [], `${f} names a command this machine does not have:\n  ${bad.join('\n  ')}`);
+    const bad = text.split('\n').filter((l) => /npx/i.test(l));
+    assert.deepEqual(bad, [], `${f} names npx:\n  ${bad.join('\n  ')}`);
+    if (BARE.test(text)) named += 1;
   }
-});
-
-test('localise leaves an installed machine alone, and never doubles itself', () => {
-  const src = 'RUN `exposurie sync` then `exposurie sync --done`. Install: npx -y @sekhon/exposurie init';
-  assert.equal(localise(src, 'exposurie'), src, 'an installed machine must be untouched');
-
-  const once = localise(src, 'npx -y @sekhon/exposurie');
-  assert.ok(once.includes('`npx -y @sekhon/exposurie sync`'));
-  assert.ok(once.includes('npx -y @sekhon/exposurie init'), 'the package name must survive');
-  assert.equal(localise(once, 'npx -y @sekhon/exposurie'), once, 'a second pass must be a no-op');
+  assert.ok(named > 0, 'the brain has to tell the agent what to run');
 });

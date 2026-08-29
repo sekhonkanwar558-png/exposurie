@@ -77,19 +77,18 @@ export function init({ at } = {}) {
   const rows = [];
   // Reported before anything else because it decides whether the rest of this
   // survives the session. Everything below assumes a command named `exposurie`
-  // exists tomorrow; under npx it does not, and the pointer scaffold writes
-  // would name nothing.
-  // Two different ways to have no command, and they are not the same sentence.
-  // Telling a developer running from a checkout that they are "in an npx cache"
-  // is being confidently wrong about their own machine — the exact failure this
-  // whole pass is about, reintroduced in the fix for it.
+  // exists tomorrow, and `scaffold` now refuses outright until it does.
+  //
+  // One sentence, not two. This used to guess at HOW the command came to be
+  // missing and say so — telling a developer running from a checkout that they
+  // were "in a temporary cache" was being confidently wrong about their own
+  // machine, which is the exact failure the pass around it was about. What we
+  // can see is whether the command is there. That is what it says.
   rows.push([
     'exposurie',
     install.permanent
       ? `installed  (${tilde(install.binary)})`
-      : install.npx
-        ? 'NOT INSTALLED — running from a temporary npx cache, gone after this run'
-        : 'NOT INSTALLED — no exposurie command on this PATH',
+      : 'NOT INSTALLED — no exposurie command on this PATH',
   ]);
   rows.push([
     'brain',
@@ -166,21 +165,19 @@ export function init({ at } = {}) {
   const steps = [];
   // FIRST, and before scaffold on purpose. scaffold writes a pointer into every
   // client's global instructions naming the command that reads the brain — so
-  // the command has to be one that still exists tomorrow. Under npx it is not:
-  // the package sits in a temp cache, `exposurie` is not on PATH, and the
-  // pointer would name nothing. That failed silently for a whole release, in
-  // the one file paid for on every message forever.
+  // the command has to be one that still exists tomorrow. That failed silently
+  // for a whole release, in the one file paid for on every message forever, and
+  // it is why `scaffold` now refuses outright rather than writing a pointer it
+  // cannot stand behind. This step is the one that clears that refusal.
   if (!install.permanent) {
     steps.push({
       run: INSTALL,
       note:
-        (install.npx
-          ? `You are running from a temporary npx cache, which leaves no command behind. `
-          : `There is no exposurie command on this PATH. `) +
-        `Install it before scaffolding: the brain is reached from every project ` +
-        `through a one-line pointer that names this command, and retrieval is ` +
-        `the whole product. This is the only install step, and ` +
-        `\`${install.invocation} uninstall\` reverses all of it.`,
+        `There is no exposurie command on this PATH. ` +
+        `Install it before scaffolding — scaffold will not run without it: the ` +
+        `brain is reached from every project through a one-line pointer that ` +
+        `names this command, and retrieval is the whole product. This is the ` +
+        `only install step, and one command reverses all of it once it is there.`,
     });
   }
   // Never offer scaffold while the pointer is broken: it is the one command
@@ -278,7 +275,7 @@ export function init({ at } = {}) {
     json: {
       brain: d.vault,
       plannedVault: vault,
-      install: { permanent: install.permanent, npx: install.npx, invocation: install.invocation },
+      install: { permanent: install.permanent, invocation: install.invocation },
       sessions: d.sessions,
       clients: d.clients.map((c) => ({ id: c.id, present: c.present, count: c.count, readable: c.readable })),
       exports: d.exports.map((e) => e.path),

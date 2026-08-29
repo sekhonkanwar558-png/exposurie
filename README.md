@@ -36,25 +36,25 @@ exposurie init
 ```
 
 `exposurie --version` confirms which release you have **and whether it is really
-installed** rather than running from a temporary `npx` cache — which is the
-thing that decides whether any of the below works. See below for why.
+installed**, which is the thing that decides whether any of the below works.
+See below for why.
 
 Requirements: **a coding agent.** That is the whole list — Node arrives with
 Claude Code. Obsidian and your chat export are steps the tool walks your agent
 through, not things you need to arrive with.
 
-**Install it, do not `npx` it — and that is a real requirement, not a
-preference.** Your brain is reached from every project through a one-line
+**The install is a real requirement, not a preference, and `scaffold` will not
+run without it.** Your brain is reached from every project through a one-line
 pointer that exposurie writes into your agent's global instructions, and that
 pointer names a command. So does the `/exposurie-sync` slash command it installs
-alongside it. `npx` leaves no command behind: the package lands in a temporary
-cache and is gone when the run ends. Retrieval is the whole product, so a
-pointer naming a command that does not exist is the tool not working, and it
-fails silently — nothing errors, the line simply never gets run.
+alongside it. Retrieval is the whole product, so a pointer naming a command that
+does not exist is the tool not working — and it fails silently: nothing errors,
+the line simply never gets run.
 
-`npx @sekhon/exposurie init` still works and still does the right thing; it
-writes a slower, self-contained `npx -y` pointer instead of a dead one, tells
-you it did, and shortens it on the next `sync` once you install properly.
+So setup declines rather than writing something it cannot stand behind. Run
+`scaffold` with nothing installed and it writes no files at all, says why, and
+names the one line that fixes it. `init` reports the same thing first, before
+anything is created.
 
 ## The commands
 
@@ -71,14 +71,13 @@ The first five are typed by **your agent**. `uninstall` is **yours** — see
 [Leaving](#leaving). Every command prints the exact next command to run, and
 `exposurie help` prints the whole list with its flags.
 
-Commands are written here the way they look once the package is installed,
-which is the documented setup. **You never have to translate them yourself:**
-every command the tool prints — and every command in the files it writes into
-your brain and your agent — is spelled the way it works on your machine, so a
-setup done through `npx` gets `npx -y @sekhon/exposurie sync` and an installed
-one gets `exposurie sync`. A test runs the whole product on a machine with
-nothing installed and fails if a single line names a command that would not
-run there.
+**There is one spelling of every command, on every machine.** `exposurie sync`
+is what the tool prints, what goes in the pointer, and what lands in the files
+it writes into your brain and your agent — there is no second form to translate
+between and nothing for you to work out. That is what the install requirement
+buys, and a test enforces it: the whole product is run on a machine with nothing
+installed, and it fails if a second invocation form ever reappears in anything
+the tool prints or writes.
 
 You never have to type any of them to keep the brain current. Setup installs a
 slash command in your agent, so **`/exposurie-sync`** does the whole thing —
@@ -590,17 +589,10 @@ One command, and you can type it yourself — no agent involved:
 exposurie uninstall
 ```
 
-If you set up through `npx` and never installed the package, there is no
-`exposurie` on your PATH, so use the form that needs nothing installed:
-
-```bash
-npx -y @sekhon/exposurie uninstall
-```
-
-You should not have to work out which of those you are, and you don't: every
-command that mentions leaving prints the one that works on your machine. This
-is the only command in the product a person types with no agent watching, so it
-is the one place a name that does not resolve has nobody to notice it.
+That is the whole command, and it is the same command on every machine. This is
+the only one in the product a person types with no agent watching, so it is the
+one place a name that does not resolve would have nobody to notice it — which is
+why there is only ever one name.
 
 It removes the pointer from every client it was written into, and deletes the
 slash command and the skill. Your own instructions files come back
@@ -617,16 +609,17 @@ after. If you want them gone, delete the folder yourself. A tool that can erase
 the thing it spent months building for you is not one you should have trusted
 with it.
 
-The package itself is still on your machine after the pointer is gone. One more
-line removes it, and `uninstall` prints this only when there is actually
-something there to remove:
+**The package itself is still on your machine after the pointer is gone**, and
+that is deliberate — `exposurie uninstall` takes back what we wrote into your
+agent, not what npm put on your PATH. One more line removes it, and `uninstall`
+prints this only when there is actually something there to remove:
 
 ```bash
 npm uninstall -g @sekhon/exposurie
 ```
 
-(If you ran the whole thing through `npx`, nothing was ever installed and there
-is nothing to clean up. `uninstall` says which of the two you are.)
+Two commands, then, and they do different jobs: the first gets exposurie out of
+your agent, the second gets it off your machine.
 
 Changed your mind later? Run `scaffold` again and it picks up exactly where you
 left off — what has been synced is recorded inside the brain, not in the tool.
@@ -657,10 +650,10 @@ by breaking the thing it guards and watching it fail:
 - `scaffold` cannot overwrite a file you have edited
 - no output can name a command the tool does not have — printed on your screen
   or written into your agent as a skill or a slash command
-- no output names a command that would not **run on your machine**: the whole
-  product is run on a PATH with nothing installed, and every line of every
-  command, plus every file written into your brain, has to name something that
-  works there
+- **no file is ever written naming a command your machine does not have** —
+  setup refuses instead. The whole product is run on a PATH with nothing
+  installed, and `scaffold` has to decline there, write nothing, and name the
+  one line that fixes it
 - `uninstall` never removes a directory it did not create
 - no two always-loaded surfaces spend your context budget on the same job
 - text that only looks like something you typed never reaches your brain
