@@ -9,7 +9,7 @@
 import { parseArgs } from 'node:util';
 import { render } from '../src/output.js';
 import { ERROR, USAGE, footer } from '../src/exit-codes.js';
-import { COMMANDS, NAMES } from '../src/commands/registry.js';
+import { COMMANDS, NAMES, versionResult } from '../src/commands/registry.js';
 
 function main(argv) {
   let parsed;
@@ -21,6 +21,7 @@ function main(argv) {
         at: { type: 'string' },
         json: { type: 'boolean' },
         help: { type: 'boolean' },
+        version: { type: 'boolean' },
         done: { type: 'boolean' },
         abort: { type: 'boolean' },
         section: { type: 'string' },
@@ -60,6 +61,20 @@ function main(argv) {
   // command is a usage error whatever else is on the line, and exit 0 with a
   // help page would tell an agent its typo worked.
   if (parsed.values.help) return COMMANDS.help.run(parsed.values, parsed.positionals);
+
+  // `--version` is the same kind of thing as `--help` — a question — so it is
+  // answered in the same place, under the same two rules, and for the same
+  // reason: a question that can reach a command can perform an action.
+  //
+  // It was not a flag at all until 1.1.0. `parseArgs` rejected it, which is
+  // safe — exit 2, nothing ran, the fix printed — but it is a wrong answer to a
+  // reasonable question, and the person asking it is usually somebody checking
+  // whether they have the release that fixed the thing that bit them. That is
+  // the audience this product now actually has.
+  //
+  // Below `--help` on purpose. If somebody asks both, they are lost rather than
+  // curious, and the help text is the better answer to being lost.
+  if (parsed.values.version) return versionResult(parsed.values.at);
 
   return entry.run(parsed.values, parsed.positionals.slice(1));
 }

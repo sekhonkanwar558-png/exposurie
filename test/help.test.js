@@ -182,3 +182,79 @@ test('a name that is not a command is still a usage error, flag or no flag', () 
   assert.match(r.out, /No command named "snyc"/);
   assert.match(r.out, /sync/, 'the error does not name the command they meant');
 });
+
+// ==========================================================================
+// `--version`, added 1.1.0 and answered in the same place for the same reason
+// ==========================================================================
+//
+// It was not a flag at all until 1.1.0: `parseArgs` rejected it, which is SAFE
+// -- exit 2, nothing ran, the fix printed -- but it is a wrong answer to a
+// reasonable question, and by 1.1.0 the person asking it is usually somebody
+// checking whether they have the release that fixed the thing that bit them.
+//
+// Everything `--help` learned applies unchanged, so it is pinned the same way
+// rather than trusted to have been written carefully.
+
+test('asking which version this is never does anything either', () => {
+  // The item-5 property, on the newer flag. If this check ever moves below
+  // dispatch, `exposurie sync --version` stages a real batch -- which is
+  // exactly what `sync --help` did on somebody else's machine.
+  const h = home();
+  const before = snapshot(h);
+
+  for (const name of NAMES) {
+    const r = run(h, [name, '--version']);
+    assert.equal(r.code, 0, `exposurie ${name} --version exited ${r.code}`);
+    assert.match(r.out, /^VERSION$/m, `exposurie ${name} --version did not print a version`);
+    assert.deepEqual(
+      snapshot(h),
+      before,
+      `exposurie ${name} --version changed something. A question must not act.`,
+    );
+  }
+});
+
+test('the version it prints is the manifest, so it cannot be bumped in one place', () => {
+  // A version written twice gets bumped once -- src/version.js says so in a
+  // comment and reads the manifest for that reason. A hardcoded string here
+  // would defeat that from the one place a user actually reads it.
+  const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version;
+  const h = home();
+  const out = run(h, ['--version']).out;
+
+  const bare = out.split('\n').filter((l) => l.trim() === manifest);
+  assert.equal(bare.length, 1, `no line holds the bare version "${manifest}". Got:\n${out}`);
+  assert.equal(JSON.parse(run(h, ['--version', '--json']).out).version, manifest);
+});
+
+test('--version carries the state line, like every other command', () => {
+  // The `help` mistake, which stayed invisible for as long as the flag that
+  // reached it was being swallowed: the one command in the product that
+  // returned no state. Anything answered beside it must not repeat it.
+  const h = home();
+  const out = run(h, ['--version']).out;
+  assert.match(out, /^exposurie\s+\d+ page/m, '--version printed no state line');
+});
+
+test('a name that is not a command beats --version too', () => {
+  const h = home();
+  const r = run(h, ['snyc', '--version']);
+  assert.equal(r.code, 2, 'an unknown command with --version exited as if it succeeded');
+  assert.match(r.out, /No command named "snyc"/);
+});
+
+test('asked both, it answers the one asked by somebody who is lost', () => {
+  // Not arbitrary. Having exactly one answer is what makes "a question cannot
+  // act" checkable at all -- two flags racing is a second behaviour to reason
+  // about, and the whole class of bug here is a flag whose handling nobody
+  // could keep in their head.
+  const h = home();
+  const out = run(h, ['--help', '--version']).out;
+  assert.match(out, /^COMMANDS$/m, '--help must win');
+  assert.ok(!/^VERSION$/m.test(out));
+});
+
+test('help lists the flag, so it can be found without being guessed', () => {
+  const h = home();
+  assert.match(run(h, ['help']).out, /--version/);
+});

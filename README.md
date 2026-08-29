@@ -35,6 +35,10 @@ npm install -g @sekhon/exposurie
 exposurie init
 ```
 
+`exposurie --version` confirms which release you have **and whether it is really
+installed** rather than running from a temporary `npx` cache — which is the
+thing that decides whether any of the below works. See below for why.
+
 Requirements: **a coding agent.** That is the whole list — Node arrives with
 Claude Code. Obsidian and your chat export are steps the tool walks your agent
 through, not things you need to arrive with.

@@ -18,6 +18,8 @@ import { uninstall } from './uninstall.js';
 import { OK } from '../exit-codes.js';
 import { vaultState } from '../vault.js';
 import { resolveVault } from '../context.js';
+import { installState, INSTALL, PACKAGE } from '../install.js';
+import { version } from '../version.js';
 import { NAMES } from './names.js';
 
 export const COMMANDS = {
@@ -70,6 +72,52 @@ if (keys.join() !== NAMES.join()) {
 
 export { NAMES };
 
+/**
+ * `--version`, answered like `--help` and rendered like every other command.
+ *
+ * It carries the state line, which is not decoration: `help` was the one thing
+ * in this product that returned no state, and that stayed invisible until the
+ * flag reaching it started working — at which point the page a confused agent
+ * lands on was printing "no brain yet" to people who had one. A flag answered
+ * beside it must not repeat that.
+ *
+ * WHAT IT SAYS BEYOND THE NUMBER, and why it is not padding. The question
+ * behind "what version am I on" is almost always "do I have the fix", and the
+ * single most useful neighbouring fact is whether this copy is INSTALLED or is
+ * a temporary npx unpack — because that is what decides whether the pointer in
+ * their agent names a command that exists. It is the one piece of information
+ * that would have shortened the first outside install, printed at the moment
+ * somebody is already asking about their copy of the tool.
+ *
+ * `--json` gives `{ "version": "1.1.0", "exit": 0 }` for anything scripting
+ * against it, because the state line comes first in human output, always, and
+ * that is a rule rather than an accident.
+ */
+export function versionResult(at) {
+  const install = installState();
+  return {
+    code: OK,
+    state: vaultState(resolveVault(at), 'version'),
+    body: [
+      'VERSION',
+      `  ${version()}`,
+      '',
+      `  ${PACKAGE} — MIT, zero runtime dependencies.`,
+      ...(install.permanent
+        ? [`  Installed on this machine at ${install.binary}`]
+        : [
+            '  NOT installed here — this is running from a temporary npx cache,',
+            '  so no exposurie command is on PATH. That matters more than it',
+            '  sounds: the pointer written into your agent names a command, and',
+            '  it names the slow fallback until a real install lands.',
+            '',
+            `      RUN: ${INSTALL}`,
+          ]),
+    ],
+    json: { version: version(), package: PACKAGE, installed: install.permanent },
+  };
+}
+
 export function helpText() {
   const w = Math.max(...NAMES.map((n) => n.length));
   return [
@@ -80,6 +128,7 @@ export function helpText() {
     '',
     'FLAGS',
     '  --help          this, on any command. It never runs the command.',
+    '  --version       which release this is, and whether it is really installed',
     '  --at <path>     the brain to use; where a new one goes (default ~/brain)',
     '  --json          machine-readable output instead of the task list',
     '  --done          (sync) the pages are written; move the cutoff',
