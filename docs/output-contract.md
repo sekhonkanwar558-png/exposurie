@@ -61,6 +61,42 @@ the tool is used, and it is the only mechanism here with field proof behind it.
 
 ---
 
+## Output the tool writes rather than prints
+
+Three files reach an agent without ever appearing on stdout, and **every rule
+above applies to all of them.** They are output; the only difference is that
+they are read later.
+
+| what | where | loaded |
+|---|---|---|
+| the pointer | each client's global instructions file | every message, every project |
+| the skill | `<client>/skills/exposurie/SKILL.md` | its description always; its body when reached for |
+| the slash command | `<client>/commands/exposurie-sync.md` | only when a person types it |
+
+That third column is the whole design. The pointer is paid for constantly, so it
+carries a pointer and never content. The other two are paid for on use, so the
+procedure that could never fit in the pointer lives there at full length.
+
+Three consequences, each of which has already been a bug somewhere in this
+codebase:
+
+- **Rule 3b applies.** A `RUN:` line in a file is a plan like any other, and it
+  fails the same way when it names a command the machine does not have. These
+  name the *resolved* invocation, never a hardcoded `exposurie`.
+- **Rule 2 applies, and this is where it was learned.** The loop that drains a
+  backlog is a numbered step in both files, never a sentence underneath one.
+- **Two always-loaded surfaces must not do one job.** A skill's description is
+  paid for exactly like the pointer. The pointer owns retrieval, so the skill
+  triggers on syncing and says so, and the two never bid for the same moment.
+
+The one register that differs: the slash command is the only thing this product
+writes that **a person reads directly**, having just typed it. So it opens by
+saying plainly what is about to happen — it is about to read their own
+conversations, and somebody who cannot tell that from the file is being asked to
+take it on faith.
+
+---
+
 ## The skeleton
 
 Position is load-bearing. An agent can rely on order, so the order never varies:

@@ -23,9 +23,10 @@ session, so you can open a fresh one every time and lose nothing.
 > Create a brain, fill it from Claude Code, Codex, Cursor, your claude.ai or
 > ChatGPT export and your own documents in resumable batches, and open any page
 > or any section of one in a single command. Curation runs inside every sync, and
-> documents dropped in `raw/` are found and handed to your agent to open. The
-> repo is public, so if something here is wrong, an issue is the right place to
-> say so.
+> documents dropped in `raw/` are found and handed to your agent to open. Setup
+> installs **`/exposurie-sync`** into your agent, so keeping the brain current is
+> a slash command you type rather than a CLI you have to remember. The repo is
+> public, so if something here is wrong, an issue is the right place to say so.
 
 ## Install
 
@@ -41,10 +42,11 @@ through, not things you need to arrive with.
 **Install it, do not `npx` it — and that is a real requirement, not a
 preference.** Your brain is reached from every project through a one-line
 pointer that exposurie writes into your agent's global instructions, and that
-pointer names a command. `npx` leaves no command behind: the package lands in a
-temporary cache and is gone when the run ends. Retrieval is the whole product,
-so a pointer naming a command that does not exist is the tool not working, and
-it fails silently — nothing errors, the line simply never gets run.
+pointer names a command. So does the `/exposurie-sync` slash command it installs
+alongside it. `npx` leaves no command behind: the package lands in a temporary
+cache and is gone when the run ends. Retrieval is the whole product, so a
+pointer naming a command that does not exist is the tool not working, and it
+fails silently — nothing errors, the line simply never gets run.
 
 `npx @sekhon/exposurie init` still works and still does the right thing; it
 writes a slower, self-contained `npx -y` pointer instead of a dead one, tells
@@ -64,6 +66,10 @@ you it did, and shortens it on the next `sync` once you install properly.
 The first five are typed by **your agent**. `uninstall` is **yours** — see
 [Leaving](#leaving). Every command prints the exact next command to run, and
 `exposurie help` prints the whole list with its flags.
+
+You never have to type any of them to keep the brain current. Setup installs a
+slash command in your agent, so **`/exposurie-sync`** does the whole thing —
+see [What it writes outside your brain](#what-it-writes-outside-your-brain).
 
 **Exit 0 means done. Exit 10 means a step needs a person — it does not mean
 anything failed.** Agents: the full output spec is
@@ -151,7 +157,7 @@ to two places with two owners:
 | the librarian (search, page, section) | the schema |
 | the extractor (reading your transcripts) | the sync procedure |
 | the curator's checks, and its two safe fixes | **the wiki-building prompt** |
-| the pointer that tells your agent this exists | the curation procedure, and the findings you have retired |
+| the pointer, the slash command and the skill | the curation procedure, and the findings you have retired |
 | the config reader | page templates, worked examples, exclude list, every page you have |
 
 The wiki-building prompt is the closest thing here to secret sauce, and it is
@@ -180,7 +186,13 @@ so in that file, and search follows you. Without that seam the failure is
 silent: renaming a folder would make half the brain invisible with nothing
 reporting it.
 
-## The one thing it writes outside your brain
+## What it writes outside your brain
+
+A pointer for your agent, and a slash command for you — plus the same procedure
+as a skill, for when you ask for a sync in words instead of typing it. All of it
+comes back out in a single command.
+
+### A pointer, so your agent knows the brain is there
 
 Your agent can only use the brain if it knows the brain exists. So setup writes
 one short block into the instructions file each agent already loads at the start
@@ -197,9 +209,44 @@ authoritative about you, and gives the one command for searching it. It carries
 no pages and no facts of yours, because it is paid for on every message in every
 project forever — so it stays small enough to earn that.
 
-**This is the only thing exposurie puts anywhere outside your brain folder.**
-`uninstall` takes it back out and returns every one of those files
-**byte-identical** — see [Leaving](#leaving).
+### A slash command, so you can run the sync yourself
+
+Type **`/exposurie-sync`** and your agent brings the brain up to date. You do
+not have to remember the CLI, and you do not have to explain to your agent what
+syncing your brain means.
+
+| agent | the slash command you type | the skill your agent reaches for |
+|---|---|---|
+| Claude Code | `~/.claude/commands/exposurie-sync.md` | `~/.claude/skills/exposurie/SKILL.md` |
+| Cursor | `~/.cursor/commands/exposurie-sync.md` | `~/.cursor/skills/exposurie/SKILL.md` |
+| Codex | `~/.codex/prompts/exposurie-sync.md` | — |
+
+The skill is the same procedure, reached when you ask for a sync in words rather
+than typing the command. Codex keeps prompts rather than skills, so it gets the
+typed half and not that one.
+
+**These are whole files, ours end to end.** No line of yours is in them, so you
+can open either and read exactly what it will do before you ever run it — which
+matters more here than in most places, because what it does is read your own
+conversations. Neither one holds the procedure: both point at
+`.exposurie/sync.md` **inside your brain**, which is yours and is never
+overwritten. Tune that one, not these — these two are rewritten by both
+`scaffold` and `sync`, because both name your brain's location and the
+invocation that works on your machine, and a stale copy of either is a file that
+fails by never running. That refresh is also what reaches a client you install
+*after* setup, which would otherwise never get a slash command at all.
+
+Both `skills/` directories above were observed on a real machine, with other
+tools' skills already living in them. The three command locations are each
+client's documented convention and were **not** — and the output says so on the
+line that writes them. A wrong guess there writes a markdown file nothing reads,
+which is the reason every path this tool writes to is markdown and never a
+config another tool parses.
+
+**That is everything exposurie puts anywhere outside your brain folder.**
+`uninstall` takes all of it back: the pointer block comes out and leaves those
+files **byte-identical**, and the files that were only ever ours are deleted
+outright — see [Leaving](#leaving).
 
 ## It works out your setup and talks to that
 
@@ -463,10 +510,11 @@ facts, and they belong in the pages. The test is whether it would change how
 
 ## One command, and curation rides inside it
 
-After setup there is **one command you ever type**. Everything that makes the
-brain better is a stage of it rather than a sibling to it, and curation runs
-from the very first batch — a brain that only gets curated once the mess exists
-is a brain where the mess got there first.
+After setup there is **one command you ever type** — `/exposurie-sync`, in the
+agent you already have open, not in a terminal. Everything that makes the brain
+better is a stage of it rather than a sibling to it, and curation runs from the
+very first batch — a brain that only gets curated once the mess exists is a
+brain where the mess got there first.
 
 The tool does the half a machine can decide: dead links, index drift, dates that
 lie about freshness, pages nothing links to, sections the librarian cannot open.
@@ -510,9 +558,10 @@ platforms' branches are covered by the test suite.
 Your brain is **local files on your disk.** Nothing is uploaded, there is no
 account, and there is no server to send anything to.
 
-The only thing written outside your brain folder is a short pointer block in
-each agent's own instructions file, and `uninstall` removes it — see
-[The one thing it writes outside your brain](#the-one-thing-it-writes-outside-your-brain).
+What is written outside your brain folder is a short pointer block in each
+agent's own instructions file, plus a slash command and a skill — none of which
+carry any content of yours, and all of which `uninstall` removes. See
+[What it writes outside your brain](#what-it-writes-outside-your-brain).
 
 `exposurie` never creates a backup remote for you. It runs `git init` on your
 brain so you get local history and undo, warns you that it lives on one disk, and
@@ -528,10 +577,13 @@ One command, and you can type it yourself — no agent involved:
 exposurie uninstall
 ```
 
-It removes the pointer from every client it was written into. Your own
-instructions files come back **byte-identical** — the block goes, the blank
-line above it goes, and a file that only ever held our block is deleted rather
-than left empty.
+It removes the pointer from every client it was written into, and deletes the
+slash command and the skill. Your own instructions files come back
+**byte-identical** — the block goes, the blank line above it goes, and a file
+that only ever held our block is deleted rather than left empty. The command
+and the skill were whole files of ours, so they go outright, along with the
+`skills/exposurie/` folder we made for one of them. Your own commands, and the
+`commands/` folder they live in, are not touched.
 
 **It does not touch your brain, and no flag makes it.** Those are your pages,
 in plain Markdown, in a git repo with its own history — they open in Obsidian,
@@ -578,7 +630,10 @@ by breaking the thing it guards and watching it fail:
 - nothing in the shipped source can read stdin
 - no personal data, private path or private tooling in any file in the repo
 - `scaffold` cannot overwrite a file you have edited
-- no output can name a command the tool does not have
+- no output can name a command the tool does not have — printed on your screen
+  or written into your agent as a skill or a slash command
+- `uninstall` never removes a directory it did not create
+- no two always-loaded surfaces spend your context budget on the same job
 - text that only looks like something you typed never reaches your brain
 - an excluded conversation is never opened, not merely dropped afterwards
 - the sync cutoff moves on evidence that pages exist, never on a claim

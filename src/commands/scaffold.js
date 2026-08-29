@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { detect, tilde, configPath, brokenConfig } from '../context.js';
 import { installState, INSTALL } from '../install.js';
 import { reachAll, pointer } from '../reach.js';
+import { surfacesAll, COMMAND_NAME } from '../surfaces.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
@@ -68,6 +69,10 @@ const COPY = [
 ];
 
 const slash = (p) => p.split(SEP).join('/');
+
+/** "Claude Code", "Claude Code and Cursor", "Claude Code, Cursor and Codex". */
+const and = (xs) =>
+  xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
 
 function dirs(seam) {
   return [
@@ -238,6 +243,19 @@ export function scaffold({ at } = {}) {
   const install = installState();
   const reach = reachAll({ text: pointer(install.invocation) });
 
+  // The other half of reaching the brain, and the half that belongs to the
+  // person rather than to their agent. The pointer tells an agent the brain
+  // exists on every message; these give the user one token to type when they
+  // want it brought up to date, and give the agent a procedure too long to have
+  // ever fitted in the pointer. Same table discipline and the same
+  // skip-if-absent rule, on the opposite side of the context budget — the
+  // reasoning is in surfaces.js.
+  //
+  // It takes the resolved invocation for the same reason the pointer does: a
+  // file naming `exposurie` on a machine where nothing installed it is correct
+  // prose naming a command that is not there, and it fails by never running.
+  const surf = surfacesAll({ vault: target, cmd: install.invocation });
+
   const open = unresolved(stepCtx(d, target), [
     'claude-code-retention',
     'claude-web-export',
@@ -264,6 +282,17 @@ export function scaffold({ at } = {}) {
     c.id,
     `${c.action} — ${tilde(c.file)}${c.verified ? '' : '   (location unconfirmed)'}`,
   ]);
+
+  const surfRows = surf.map((c) => [
+    `${c.id} ${c.kind}`,
+    `${c.action} — ${tilde(c.file)}${c.verified ? '' : '   (location unconfirmed)'}`,
+  ]);
+
+  // Named separately from the rows because the relay line is about what the
+  // PERSON can now do, and only the typed surface gives them anything. A skill
+  // written into a client is still the agent's to reach for; telling a user
+  // they can "type" one would be telling them something untrue.
+  const typed = [...new Set(surf.filter((c) => c.kind === 'command').map((c) => c.name))];
 
   const body = [
     ...block(fresh ? 'CREATED' : 'TOPPED UP', rows),
@@ -302,6 +331,33 @@ export function scaffold({ at } = {}) {
         'It comes back out whenever they want, in one command they can type ' +
         'themselves — `exposurie uninstall` — which leaves their own files ' +
         'byte-identical and never touches the brain.',
+      74,
+      '  ',
+    ),
+    '',
+    'YOURS TO TYPE — the sync, without having to ask an agent for it',
+    ...(surfRows.length
+      ? block('', surfRows).filter((l) => l.trim() !== '')
+      : ['  no supported client found — nothing written']),
+    ...(typed.length
+      ? [
+          '',
+          ...wrap(
+            `TELL YOUR USER: they can type /${COMMAND_NAME} in ` +
+              `${and(typed)} to sync their brain themselves, whenever they want ` +
+              `it caught up. They do not have to explain what that means to you ` +
+              `first, and they can read the file to see exactly what it does.`,
+            74,
+            '  ',
+          ),
+        ]
+      : []),
+    '',
+    ...wrap(
+      'These are whole files, ours end to end — not a block inside a file of ' +
+        'theirs — so uninstall deletes them outright rather than editing around ' +
+        'anything. What they run is `.exposurie/sync.md` inside the brain, which ' +
+        'is the user\'s and is never overwritten.',
       74,
       '  ',
     ),
@@ -351,6 +407,14 @@ export function scaffold({ at } = {}) {
       config: configPath(),
       install: { permanent: install.permanent, npx: install.npx, invocation: install.invocation },
       reach: reach.map((c) => ({ id: c.id, file: c.file, action: c.action, verified: c.verified })),
+      surfaces: surf.map((c) => ({
+        id: c.id,
+        kind: c.kind,
+        file: c.file,
+        action: c.action,
+        verified: c.verified,
+      })),
+      command: COMMAND_NAME,
       pending: open.map((p) => p.id),
     },
   };

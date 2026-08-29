@@ -56,6 +56,7 @@ import { conversationExcluded } from '../extract/exclude.js';
 import { stillBeingWritten } from '../extract/live.js';
 import { invocation } from '../install.js';
 import { reachAll, pointer } from '../reach.js';
+import { surfacesAll } from '../surfaces.js';
 import { curate, report } from '../curate.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { readSeam, readState, statePath, vaultState, categoryDirs } from '../vault.js';
@@ -960,6 +961,18 @@ export function sync({ done: isDone, abort: isAbort, at } = {}) {
   // inject() compares bytes and reports `unchanged` without writing, so on the
   // overwhelmingly common path this reads four small files and touches none.
   reachAll({ text: pointer(invocation()) });
+
+  // And the same for the skill and the slash command, which are written at
+  // scaffold for exactly the same reasons and go stale in exactly the same two
+  // ways — an invocation that was npx when they were written, and a brain that
+  // has since moved.
+  //
+  // The second half of that argument is the stronger one here. A client the
+  // user installs AFTER setup gets no pointer until this line runs, and it gets
+  // no slash command either — so somebody who adds Cursor next month would go
+  // on typing nothing, with the feature installed and invisible. put() compares
+  // bytes the way inject() does, so the common path writes nothing.
+  surfacesAll({ vault: d.vault, cmd: invocation() });
 
   if (isAbort) return abort(d.vault);
   return isDone ? done(d.vault) : stage(d.vault, d);

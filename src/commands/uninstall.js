@@ -28,6 +28,7 @@
 
 import { OK } from '../exit-codes.js';
 import { unreachAll } from '../reach.js';
+import { unsurfaceAll } from '../surfaces.js';
 import { installState, UNINSTALL } from '../install.js';
 import { detect, tilde } from '../context.js';
 import { block, wrap } from '../output.js';
@@ -48,17 +49,26 @@ export function uninstall({ at } = {}) {
   // Refusing to let someone leave, over a cosmetic argument, is the worst thing
   // this command could do. It says the path was empty and gets on with it.
   const missingAsked = d.askedVault && !d.vault ? d.askedVault : null;
-  const results = unreachAll();
+
+  // Two kinds of thing get taken back, and they come apart cleanly: a BLOCK
+  // spliced out of a file the user owns, and a FILE that was only ever ours.
+  // The second is the easier promise to keep — there is nothing around it to
+  // preserve — which is why adding the skill and the command surfaces cost this
+  // command a line of wiring rather than a mechanism.
+  const results = [
+    ...unreachAll().map((r) => ({ ...r, label: r.name })),
+    ...unsurfaceAll().map((r) => ({ ...r, label: `${r.name} ${r.kind}` })),
+  ];
 
   const removed = results.filter((r) => r.action === 'removed');
   const absent = results.filter((r) => r.action === 'absent');
 
   const rows = [];
-  for (const r of removed) rows.push([r.name, `removed   ${tilde(r.file)}`]);
+  for (const r of removed) rows.push([r.label, `removed   ${tilde(r.file)}`]);
   // A client that was present with nothing of ours in it still gets a line.
   // Silence there reads as "it missed one", and the entire value of this
   // command is that you can see for yourself that it finished.
-  for (const r of absent) rows.push([r.name, `nothing of ours was there`]);
+  for (const r of absent) rows.push([r.label, `nothing of ours was there`]);
 
   const body = [
     'UNINSTALLED',
@@ -67,9 +77,11 @@ export function uninstall({ at } = {}) {
       : ['  No supported client found — there was nothing to remove.']),
     '',
     ...wrap(
-      `That is every byte exposurie wrote outside your brain. Those files are ` +
-        `yours and they are back exactly as you had them — the block came out, ` +
-        `nothing around it moved.`,
+      `That is every byte exposurie wrote outside your brain. Where it had ` +
+        `added a block to a file of yours, the block came out and nothing around ` +
+        `it moved; where the whole file was ours — a skill, a slash command — ` +
+        `the file is gone, and so is the folder it sat in if nothing else was ` +
+        `in there.`,
       74,
       '  ',
     ),
