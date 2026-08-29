@@ -18,9 +18,10 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { detect, tilde, configPath, brokenConfig } from '../context.js';
-import { installState, INSTALL } from '../install.js';
+import { installState, INSTALL, cmd } from '../install.js';
 import { reachAll, pointer } from '../reach.js';
 import { surfacesAll, COMMAND_NAME } from '../surfaces.js';
+import { NAMES } from './names.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, ERROR, HUMAN } from '../exit-codes.js';
@@ -129,6 +130,32 @@ function initGit(vault) {
   }
 }
 
+/**
+ * Spell the commands inside a copied template the way they work HERE.
+ *
+ * The templates are written once and **never overwritten** — that is the whole
+ * ownership promise — so a command baked into one is baked in for good. On a
+ * machine set up through `npx` there is no `exposurie` on PATH, and
+ * `.exposurie/sync.md` is the file the user's agent is sent to on every sync:
+ * the single worst place in the brain for a command that does not run.
+ *
+ * It degrades in the safe direction, which is why baking is acceptable at all.
+ * The npx form keeps working forever, including after the user installs
+ * properly — it is only slower. The bare form does not work at all on the
+ * machine that needed the other one. So when the two disagree, writing the
+ * long one costs a package resolve and writing the short one costs the file.
+ *
+ * The `[^/]` guard is not decoration: the npx invocation ENDS in the word
+ * `exposurie` (`npx -y @sekhon/exposurie`), so a rule that matched the package
+ * name too would rewrite its own output on a second pass.
+ */
+const COMMAND_WORD = new RegExp(`(^|[^\\w/@-])exposurie (${NAMES.join('|')})\\b`, 'g');
+
+export function localise(text, invocation) {
+  if (invocation === 'exposurie') return text;
+  return text.replace(COMMAND_WORD, (_m, before, name) => `${before}${invocation} ${name}`);
+}
+
 /** Write a file only if it is absent. Returns true when it actually wrote. */
 function writeIfAbsent(path, text) {
   if (existsSync(path)) return false;
@@ -169,7 +196,7 @@ export function scaffold({ at } = {}) {
           `"vault" in ${tilde(configPath())}.`,
         // FIX is one short action on purpose: it is never wrapped, because
         // wrapping a command breaks it, and a test pins the length.
-        fix: 'RUN: exposurie scaffold   (tops up the brain that exists)',
+        fix: `RUN: ${cmd('scaffold')}   (tops up the brain that exists)`,
       },
     };
   }
@@ -185,8 +212,13 @@ export function scaffold({ at } = {}) {
   const kept = [];
   const copied = { ...(seam.copied || {}) };
 
+  // Resolved before the copy loop rather than at the pointer below, because the
+  // templates need it too: a command baked into a file we never overwrite is
+  // baked in for good. See localise().
+  const install = installState();
+
   for (const [src, dest, what] of COPY) {
-    const text = readFileSync(join(TEMPLATES, src), 'utf8');
+    const text = localise(readFileSync(join(TEMPLATES, src), 'utf8'), install.invocation);
     if (writeIfAbsent(join(target, dest), text)) {
       created.push([slash(dest), `${what} — yours now`]);
       // Record what we wrote and what it looked like, so a later version can
@@ -240,7 +272,6 @@ export function scaffold({ at } = {}) {
   // names `exposurie` on a machine where nothing installed it is how retrieval
   // died silently on every npx install — the file is correct prose naming a
   // command that is not there, so it never errors and never runs.
-  const install = installState();
   const reach = reachAll({ text: pointer(install.invocation) });
 
   // The other half of reaching the brain, and the half that belongs to the

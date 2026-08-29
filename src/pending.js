@@ -31,6 +31,7 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { KEEP_YEARS_DAYS } from './context.js';
+import { cmd } from './install.js';
 
 /**
  * The catalog. Every human step in the product is declared here and nowhere
@@ -231,7 +232,7 @@ export const STEPS = {
       'real answer — this edits a file belonging to software we do not own, on',
       'their machine, and silence is not consent. If they said no, or did not',
       'answer, record it instead:',
-      `    exposurie decline claude-code-retention --because "<their words>"`,
+      `    ${cmd('decline claude-code-retention')} --because "<their words>"`,
       '',
       `Edit ${ctx.settings || '~/.claude/settings.json'} and set:`,
       `    "cleanupPeriodDays": ${KEEP_YEARS_DAYS}`,

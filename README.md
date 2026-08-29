@@ -71,6 +71,15 @@ The first five are typed by **your agent**. `uninstall` is **yours** — see
 [Leaving](#leaving). Every command prints the exact next command to run, and
 `exposurie help` prints the whole list with its flags.
 
+Commands are written here the way they look once the package is installed,
+which is the documented setup. **You never have to translate them yourself:**
+every command the tool prints — and every command in the files it writes into
+your brain and your agent — is spelled the way it works on your machine, so a
+setup done through `npx` gets `npx -y @sekhon/exposurie sync` and an installed
+one gets `exposurie sync`. A test runs the whole product on a machine with
+nothing installed and fails if a single line names a command that would not
+run there.
+
 You never have to type any of them to keep the brain current. Setup installs a
 slash command in your agent, so **`/exposurie-sync`** does the whole thing —
 see [What it writes outside your brain](#what-it-writes-outside-your-brain).
@@ -648,6 +657,10 @@ by breaking the thing it guards and watching it fail:
 - `scaffold` cannot overwrite a file you have edited
 - no output can name a command the tool does not have — printed on your screen
   or written into your agent as a skill or a slash command
+- no output names a command that would not **run on your machine**: the whole
+  product is run on a PATH with nothing installed, and every line of every
+  command, plus every file written into your brain, has to name something that
+  works there
 - `uninstall` never removes a directory it did not create
 - no two always-loaded surfaces spend your context budget on the same job
 - text that only looks like something you typed never reaches your brain

@@ -10,6 +10,7 @@ import { parseArgs } from 'node:util';
 import { render } from '../src/output.js';
 import { ERROR, USAGE, footer } from '../src/exit-codes.js';
 import { COMMANDS, NAMES, versionResult } from '../src/commands/registry.js';
+import { cmd } from '../src/install.js';
 
 function main(argv) {
   let parsed;
@@ -33,17 +34,20 @@ function main(argv) {
       },
     });
   } catch (e) {
-    return { code: USAGE, error: { message: e.message, fix: 'RUN: exposurie help' } };
+    return { code: USAGE, error: { message: e.message, fix: `RUN: ${cmd('help')}` } };
   }
 
-  const cmd = parsed.positionals[0] ?? 'init';
-  const entry = COMMANDS[cmd];
+  // Named `asked` rather than `cmd`, because `cmd` is now the imported helper
+  // that spells a command the way it works on this machine — and a local const
+  // of the same name shadowed it here, turning every usage error into a crash.
+  const asked = parsed.positionals[0] ?? 'init';
+  const entry = COMMANDS[asked];
   if (!entry) {
     return {
       code: USAGE,
       error: {
-        message: `No command named "${cmd}". This version has: ${NAMES.join(', ')}.`,
-        fix: 'RUN: exposurie help',
+        message: `No command named "${asked}". This version has: ${NAMES.join(', ')}.`,
+        fix: `RUN: ${cmd('help')}`,
       },
     };
   }

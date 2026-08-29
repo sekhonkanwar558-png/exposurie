@@ -53,6 +53,43 @@ a test greps every plan the tool can print and asserts each named command is in
 it. Where the build genuinely stops, output says so in words instead of naming
 a command that would fail.
 
+### 3c. Spell the command the way it works on THIS machine
+
+The sibling of 3b, and the one that has been broken three times.
+
+`exposurie sync` is the right thing to print on a machine where the package is
+installed and **the wrong thing everywhere else** — `npx` leaves no command on
+PATH, so the line names nothing and fails by never running. A correct command
+for the wrong machine is indistinguishable, on the page, from a correct one.
+
+So **no printed command is ever written as a literal.** They all go through
+`cmd()` in `src/install.js`, which resolves against PATH per call:
+
+```js
+cmd('sync --done')   // "exposurie sync --done"
+                     // "npx -y @sekhon/exposurie sync --done"
+```
+
+That includes the files copied into the user's brain, which `scaffold` runs
+through `localise()` on the way in — those are written once and never
+overwritten, so a wrong command in `.exposurie/sync.md` is wrong for the life
+of the brain.
+
+**Why this is a rule and not a habit.** It was fixed in `reach.js` on
+2026-08-28, where the bug was reported, and the same literal stayed in
+thirty-three other places. It came back on 2026-08-29 in `uninstall` — the one
+command a person types with no agent to notice "command not found" for them.
+Fixing the reported site and not the class is what makes a bug recur.
+
+It is now a property test rather than a review item: `test/invocation.test.js`
+runs every command on a PATH with no exposurie on it and fails if any output,
+or any file written into the brain, names a bare one. A site added later is
+covered without anyone remembering this page exists.
+
+> Two of those sites were invisible to a source grep — `` `exposurie ${DECLINE}` ``
+> builds the name from a variable, and `bin/` is not `src/`. The test looks at
+> output, which is why it found them.
+
 ### 4. The directive rides the output
 
 Anything the agent must keep doing is attached to output it is **already

@@ -36,6 +36,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { categoryDirs } from './vault.js';
+import { cmd } from './install.js';
 
 /**
  * How much a single read may spend before the body is replaced by an outline.
@@ -53,7 +54,7 @@ export function q(s) {
 
 /** The exact argv that returns one section. The tool prints this; agents never build it. */
 export function sectionCmd(title, heading, nth) {
-  const base = `exposurie read ${q(title)} --section ${q(heading)}`;
+  const base = cmd(`read ${q(title)} --section ${q(heading)}`);
   return nth ? `${base} --nth ${nth}` : base;
 }
 

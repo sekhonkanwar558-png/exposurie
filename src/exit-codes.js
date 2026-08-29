@@ -6,6 +6,8 @@
 // health signal that fails the run over a non-problem gets muted — after which
 // it is worth nothing on the day something is actually wrong.
 
+import { cmd } from './install.js';
+
 export const OK = 0;      // did the thing; nothing outstanding
 export const ERROR = 1;   // actually broke; an ERROR block explains it
 export const USAGE = 2;   // no such command / bad flags
@@ -20,12 +22,22 @@ export const FOOTERS = {
   // about a missing brain was being sent to the help text for a problem the
   // help text does not have. The code's own definition already said "bad
   // flags"; only what it printed was narrow.
-  [USAGE]: 'EXIT 2 — the call was wrong, not the machine. Nothing ran. Fix the command from the ERROR block above, or RUN: exposurie help',
+  // USAGE is built in footer() instead of sitting here, because it is the one
+  // footer that NAMES A COMMAND — and a command has to be spelled the way it
+  // works on the machine reading it. A constant cannot do that: this module is
+  // imported once and the answer depends on whether anything is on PATH.
+
   [HUMAN]:
     'EXIT 10 — there is a step for your user. Nothing has failed. ' +
     'Do the RUN steps above, relay the FOR YOUR USER steps, and carry on.',
 };
 
 export function footer(code) {
+  if (code === USAGE) {
+    return (
+      'EXIT 2 — the call was wrong, not the machine. Nothing ran. Fix the ' +
+      `command from the ERROR block above, or RUN: ${cmd('help')}`
+    );
+  }
   return FOOTERS[code] ?? `EXIT ${code}`;
 }

@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { readSeam, vaultState, expandPath } from '../vault.js';
 import { configState, brokenConfig, resolveVault, noBrainAt, pointedVault } from '../context.js';
 import { OK, ERROR, USAGE } from '../exit-codes.js';
+import { cmd } from '../install.js';
 import {
   allPages,
   headings,
@@ -74,7 +75,7 @@ export function read(values = {}, positionals = []) {
     // Their own call, rebuilt without the flag. `exposurie read` on its own is
     // not a command, so the generic form would hand an agent a second broken
     // one to run.
-    const retry = ['exposurie read'];
+    const retry = [cmd('read')];
     if (positionals[0]) retry.push(q(positionals[0]));
     if (values.search) retry.push(`--search ${q(values.search)}`);
     if (values.section) retry.push(`--section ${q(values.section)}`);
@@ -94,7 +95,7 @@ export function read(values = {}, positionals = []) {
       state,
       error: {
         message: 'No brain on this machine yet, so there is nothing to read.',
-        fix: 'RUN: exposurie init',
+        fix: `RUN: ${cmd('init')}`,
       },
     };
   }
@@ -125,7 +126,7 @@ export function read(values = {}, positionals = []) {
     for (const r of shown) {
       body.push('');
       body.push(`${r.page.title}   [${r.count} hit${r.count === 1 ? '' : 's'}]`);
-      body.push(`  RUN:  exposurie read ${q(r.page.title)}`);
+      body.push(`  RUN:  ${cmd(`read ${q(r.page.title)}`)}`);
       // The section a hit lives in, with the command for it. The agent's next
       // act is to open the matching part, so handing it the page alone leaves
       // the actual work undone.
@@ -149,7 +150,7 @@ export function read(values = {}, positionals = []) {
       state,
       error: {
         message: 'read needs a page title, or --search to find one.',
-        fix: `RUN: exposurie read --search ${q('what you are looking for')}`,
+        fix: `RUN: ${cmd(`read --search ${q('what you are looking for')}`)}`,
       },
     };
   }
@@ -159,10 +160,10 @@ export function read(values = {}, positionals = []) {
     const body = [];
     if (candidates.length > 1) {
       body.push(`${candidates.length} pages match ${q(want)}. Pick one:`);
-      for (const c of candidates.slice(0, 12)) body.push(`  RUN:  exposurie read ${q(c.title)}`);
+      for (const c of candidates.slice(0, 12)) body.push(`  RUN:  ${cmd(`read ${q(c.title)}`)}`);
     } else {
       body.push(`No page titled ${q(want)}.`);
-      body.push(`  RUN:  exposurie read --search ${q(want)}`);
+      body.push(`  RUN:  ${cmd(`read --search ${q(want)}`)}`);
     }
     return { code: OK, state, body };
   }
@@ -183,7 +184,7 @@ export function read(values = {}, positionals = []) {
       const body = [];
       if (cands.length === 0) {
         body.push(`${page.title} has no section matching ${q(values.section)}.`);
-        body.push(`  RUN:  exposurie read ${q(page.title)} --outline`);
+        body.push(`  RUN:  ${cmd(`read ${q(page.title)} --outline`)}`);
       } else {
         // Identical headings. Exactness cannot separate them, so hand over one
         // working command per candidate rather than a rule to apply.
@@ -227,7 +228,7 @@ export function read(values = {}, positionals = []) {
     }
     body.push(...outlineBlock(page.title, text, heads));
     body.push('');
-    body.push(`Whole page anyway:  exposurie read ${q(page.title)} --full`);
+    body.push(`Whole page anyway:  ${cmd(`read ${q(page.title)} --full`)}`);
     return { code: OK, state, body };
   }
 

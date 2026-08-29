@@ -19,6 +19,7 @@ import { openArchive, isConversationsPart } from './extract/archive.js';
 import { cursorRoot, readCursorSessions, countCursorSessions, cursorMtime } from './extract/cursor.js';
 import { SIGNATURE as CHATGPT_SIGNATURE } from './extract/chatgpt.js';
 import { expandPath, isVault, DEFAULT_VAULT } from './vault.js';
+import { cmd } from './install.js';
 
 const HOME = homedir();
 
@@ -362,7 +363,7 @@ export function noBrainAt(asked, pointed, retry) {
       `a brain you did not name is what this flag exists to prevent.`,
     fix: pointed
       ? `RUN: ${retry}   (the same thing without --at, against ${tilde(pointed)})`
-      : `RUN: exposurie scaffold --at ${asked}   (this machine has no brain anywhere yet)`,
+      : `RUN: ${cmd(`scaffold --at ${asked}`)}   (this machine has no brain anywhere yet)`,
   };
 }
 

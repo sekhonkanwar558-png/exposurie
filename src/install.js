@@ -100,3 +100,29 @@ export function installState(env = process.env, platform = process.platform, sel
 
 /** Just the string the pointer should name. */
 export const invocation = (...a) => installState(...a).invocation;
+
+/**
+ * EVERY command this tool prints, spelled the way it works on THIS machine.
+ *
+ * `cmd('sync --done')` is `exposurie sync --done` where a binary exists and
+ * `npx -y @sekhon/exposurie sync --done` where one does not.
+ *
+ * WHY THIS IS A FUNCTION AND NOT A CONSTANT, which is the whole history of the
+ * bug it closes. The pointer used to hardcode `exposurie`, while the documented
+ * install was `npx` — which leaves no such command behind — so every npx
+ * install wrote an instruction naming nothing. That was fixed in reach.js on
+ * 2026-08-28 **and nowhere else**, because the fix was made where the bug was
+ * reported rather than where it lived. The same literal stayed in thirty-one
+ * other places, and surfaced again on 2026-08-29 in `uninstall` — the one
+ * command a person types with no agent to notice "command not found" for them.
+ *
+ * So the rule is now mechanical rather than remembered: **no printed command is
+ * ever written as a literal.** A test runs every command on a PATH with no
+ * exposurie on it and fails if a bare one appears in any output, which is a
+ * property a future command cannot forget to satisfy.
+ *
+ * It resolves per call rather than being computed once, and that is deliberate:
+ * `npm install -g` during a session changes the answer, and a value captured at
+ * import would go on printing the slow form for the rest of the run.
+ */
+export const cmd = (rest = '') => (rest ? `${invocation()} ${rest}` : invocation());

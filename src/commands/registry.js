@@ -18,7 +18,7 @@ import { uninstall } from './uninstall.js';
 import { OK } from '../exit-codes.js';
 import { vaultState } from '../vault.js';
 import { resolveVault } from '../context.js';
-import { installState, INSTALL, PACKAGE } from '../install.js';
+import { installState, INSTALL, PACKAGE, cmd } from '../install.js';
 import { version } from '../version.js';
 import { NAMES } from './names.js';
 
@@ -136,11 +136,16 @@ export function helpText() {
     '  --because "..." (decline) what your user actually said',
     '',
     'READING',
-    '  exposurie read "<page>"                     the page, or a map if large',
-    '  exposurie read "<page>" --section "<name>"  one section of it',
-    '  exposurie read "<page>" --outline           the map, whatever the size',
-    '  exposurie read "<page>" --full              the whole page regardless',
-    '  exposurie read --search "<query>"           which page holds a thing',
+    // Resolved, and laid out down the page rather than in a padded column: the
+    // npx form is 24 characters where `exposurie` is 9, so a hand-aligned block
+    // comes apart on exactly the machine that needs the longer one.
+    ...[
+      ['"<page>"', 'the page, or a map if large'],
+      ['"<page>" --section "<name>"', 'one section of it'],
+      ['"<page>" --outline', 'the map, whatever the size'],
+      ['"<page>" --full', 'the whole page regardless'],
+      ['--search "<query>"', 'which page holds a thing'],
+    ].flatMap(([args, what]) => [`  ${cmd('read')} ${args}`, `      ${what}`]),
     '',
     '  A large page returns a MAP, not the page — every line of it carries the',
     '  exact command that opens that section. You never have to build one.',
@@ -151,7 +156,7 @@ export function helpText() {
     // hand-aligned block would come apart on exactly the machine that needs the
     // longer one. This is the ONE command in the product typed by a person with
     // no agent to notice "command not found" for them.
-    `  ${installState().invocation} uninstall`,
+    `  ${cmd('uninstall')}`,
     '      Takes the tool back off this machine. Your brain stays where it is,',
     '      in plain Markdown, and nothing in it needs this tool to be read.',
     '      Type it yourself; it does not need an agent.',

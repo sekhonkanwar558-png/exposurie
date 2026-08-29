@@ -6,7 +6,7 @@
 // input, and the human step is never a gate.
 
 import { detect, tilde } from '../context.js';
-import { installState, INSTALL } from '../install.js';
+import { installState, INSTALL, cmd } from '../install.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
@@ -196,7 +196,7 @@ export function init({ at } = {}) {
   }
   if (!d.vault && !d.configError) {
     steps.push({
-      run: `exposurie scaffold --at ${tilde(vault)}`,
+      run: cmd(`scaffold --at ${tilde(vault)}`),
       note:
         `Creates the brain and copies in the schema, the page templates and the ` +
         `prompt that writes pages — those become the user's, and are never ` +
@@ -209,7 +209,7 @@ export function init({ at } = {}) {
   // nothing to do.
   if (d.vault && (d.sessions > 0 || (web && !web.error && web.conversations > 0))) {
     steps.push({
-      run: 'exposurie sync',
+      run: cmd('sync'),
       note:
         `Stages a batch of conversation — from this machine and from any chat ` +
         `export you have, newest first — and hands it back for you to fold into ` +

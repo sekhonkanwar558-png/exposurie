@@ -19,6 +19,7 @@
 //     read once.
 
 import { SYNC, DECLINE, exists } from './commands/names.js';
+import { cmd } from './install.js';
 
 const INDENT = '  ';
 
@@ -64,7 +65,7 @@ export function stateLine(s = {}) {
     out.push('exposurie  no brain yet');
     // Never advertise the command we are already inside. A nudge that fires
     // during its own target teaches an agent the arrow is decoration.
-    if (s.self !== 'init') out.push('           -> RUN: exposurie init');
+    if (s.self !== 'init') out.push(`           -> RUN: ${cmd('init')}`);
     return out;
   }
   const bits = [];
@@ -87,7 +88,7 @@ export function stateLine(s = {}) {
   // in the same change that adds the command.
   const earned = s.unfiled > 0 || (s.lastSyncDays ?? 0) >= 7;
   if (earned && s.self !== SYNC && exists(SYNC)) {
-    out.push(`           -> RUN: exposurie ${SYNC}`);
+    out.push(`           -> RUN: ${cmd(SYNC)}`);
   }
   return out;
 }
@@ -181,7 +182,7 @@ export function pendingBlock(pending) {
     // one about a step not outstaying the decision.
     if (exists(DECLINE)) {
       out.push(`${INDENT}  IF THEY SAY NO, RECORD IT — it stops asking, and it is reversible:`);
-      out.push(`${INDENT}      exposurie ${DECLINE} ${p.id} --because "<their words>"`);
+      out.push(`${INDENT}      ${cmd(`${DECLINE} ${p.id}`)} --because "<their words>"`);
     }
     out.push(`${INDENT}  This does NOT block anything. Keep working.`);
   }

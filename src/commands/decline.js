@@ -13,6 +13,7 @@ import { OK, USAGE } from '../exit-codes.js';
 import { STEPS, decline as record, declined } from '../pending.js';
 import { detect, noBrainAt } from '../context.js';
 import { vaultState } from '../vault.js';
+import { cmd } from '../install.js';
 
 export function decline(values = {}, positionals = []) {
   const id = positionals[0];
@@ -22,7 +23,7 @@ export function decline(values = {}, positionals = []) {
       code: USAGE,
       error: {
         message: 'decline needs the id of the step your user said no to.',
-        fix: `RUN: exposurie decline <id> --because "<what they said>"   ids: ${Object.keys(STEPS).join(', ')}`,
+        fix: `RUN: ${cmd('decline')} <id> --because "<what they said>"   ids: ${Object.keys(STEPS).join(', ')}`,
       },
     };
   }
@@ -51,7 +52,7 @@ export function decline(values = {}, positionals = []) {
       error: noBrainAt(
         d.askedVault,
         d.pointedVault,
-        `exposurie decline ${id}${values.because ? ` --because "${values.because}"` : ''}`,
+        cmd(`decline ${id}${values.because ? ` --because "${values.because}"` : ''}`),
       ),
     };
   }
@@ -60,7 +61,7 @@ export function decline(values = {}, positionals = []) {
       code: USAGE,
       error: {
         message: 'There is no brain here to record that in.',
-        fix: 'RUN: exposurie scaffold',
+        fix: `RUN: ${cmd('scaffold')}`,
       },
     };
   }

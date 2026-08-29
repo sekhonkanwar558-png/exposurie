@@ -54,7 +54,7 @@ import { findNewFiles, renderFiles } from '../extract/files.js';
 import { redact } from '../extract/redact.js';
 import { conversationExcluded } from '../extract/exclude.js';
 import { stillBeingWritten } from '../extract/live.js';
-import { invocation } from '../install.js';
+import { invocation, cmd } from '../install.js';
 import { reachAll, pointer } from '../reach.js';
 import { surfacesAll } from '../surfaces.js';
 import { curate, report } from '../curate.js';
@@ -212,7 +212,7 @@ const noBrain = () => ({
   state: { vault: null, self: 'sync' },
   error: {
     message: 'There is no brain on this machine yet, so there is nowhere to put anything.',
-    fix: 'RUN: exposurie scaffold',
+    fix: `RUN: ${cmd('scaffold')}`,
   },
 });
 
@@ -674,7 +674,7 @@ function stage(vault, d) {
             'existing pages before creating new ones, then update index.md and ' +
             'append one entry to log.md.',
         },
-        { run: 'exposurie sync --done' },
+        { run: cmd('sync --done') },
       ]),
       '',
       ...wrap(
@@ -745,7 +745,7 @@ function abort(vault) {
       state: vaultState(vault, 'sync'),
       error: {
         message: 'There is no staged batch, so there is nothing to discard.',
-        fix: 'RUN: exposurie sync',
+        fix: `RUN: ${cmd('sync')}`,
       },
     };
   }
@@ -802,7 +802,7 @@ function done(vault) {
       state: vaultState(vault, 'sync'),
       error: {
         message: 'There is no staged batch waiting, so there is no cutoff to move.',
-        fix: 'RUN: exposurie sync',
+        fix: `RUN: ${cmd('sync')}`,
       },
     };
   }
@@ -879,7 +879,7 @@ function done(vault) {
         ...(next.unfiled > 0
           ? [
               {
-                run: 'exposurie sync',
+                run: cmd('sync'),
                 note:
                   `${next.unfiled} conversation${next.unfiled === 1 ? '' : 's'} still unread. Go straight ` +
                   `on to the next batch and keep repeating this whole cycle — stage, read, write, ` +
@@ -903,7 +903,7 @@ export function sync({ done: isDone, abort: isAbort, at } = {}) {
       code: USAGE,
       error: {
         message: '--done and --abort are opposites: one closes a batch, the other throws it away.',
-        fix: 'RUN: exposurie sync --done   (or --abort, but not both)',
+        fix: `RUN: ${cmd('sync --done')}   (or --abort, but not both)`,
       },
     };
   }
@@ -928,7 +928,7 @@ export function sync({ done: isDone, abort: isAbort, at } = {}) {
       error: noBrainAt(
         d.askedVault,
         d.pointedVault,
-        `exposurie sync${isDone ? ' --done' : ''}${isAbort ? ' --abort' : ''}`,
+        cmd(`sync${isDone ? ' --done' : ''}${isAbort ? ' --abort' : ''}`),
       ),
     };
   }
