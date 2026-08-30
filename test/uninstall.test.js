@@ -52,8 +52,30 @@ function home({ mine = 'my own rules\ndo not touch this line\n' } = {}) {
   return h;
 }
 
+/**
+ * A sandboxed machine that HAS exposurie installed -- a real file, because
+ * scaffold refuses without one, and onPath() stats it.
+ *
+ * The PATH is sandboxed rather than inherited, and that is not tidiness. With
+ * the real PATH these tests resolve the developer's OWN global install, and
+ * since 2026-08-30 `uninstall` removes the package it finds -- so `npm test`
+ * deleted it and the next 93 tests failed because scaffold refuses without one.
+ * A fake binary with no node_modules beside it is not one npm placed, so the
+ * removal declines and the suite cannot eat the machine it runs on.
+ */
+function sandboxPath(h) {
+  const dir = join(h, 'fakebin');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, process.platform === 'win32' ? 'exposurie.cmd' : 'exposurie'), '', 'utf8');
+  return dir + (process.platform === 'win32' ? ';' : ':') + dirname(process.execPath);
+}
+
 function run(h, args) {
-  const opts = { encoding: 'utf8', env: { ...process.env, HOME: h, USERPROFILE: h } };
+  const p = sandboxPath(h);
+  const opts = {
+    encoding: 'utf8',
+    env: { ...process.env, HOME: h, USERPROFILE: h, PATH: p, Path: p },
+  };
   try {
     return { code: 0, out: execFileSync(process.execPath, [BIN, ...args], opts) };
   } catch (e) {

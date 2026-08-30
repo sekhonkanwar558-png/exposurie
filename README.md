@@ -30,6 +30,19 @@ session, so you can open a fresh one every time and lose nothing.
 
 ## Install
 
+**One line. Paste it into the coding agent you already have open** — Claude
+Code, Codex, Cursor — and it does the rest:
+
+```
+Set up exposurie for me: run `npm install -g @sekhon/exposurie`, then run `exposurie init` and follow exactly what it prints.
+```
+
+That is the whole install. Everything after it is your agent working, because
+this tool is written to be read by one — see
+[The unusual part](#the-unusual-part-this-cli-talks-to-your-agent-not-to-you).
+
+If you would rather drive it yourself, the same two things in a terminal:
+
 ```bash
 npm install -g @sekhon/exposurie
 exposurie init
@@ -37,7 +50,6 @@ exposurie init
 
 `exposurie --version` confirms which release you have **and whether it is really
 installed**, which is the thing that decides whether any of the below works.
-See below for why.
 
 Requirements: **a coding agent.** That is the whole list — Node arrives with
 Claude Code. Obsidian and your chat export are steps the tool walks your agent
@@ -589,10 +601,11 @@ One command, and you can type it yourself — no agent involved:
 exposurie uninstall
 ```
 
-That is the whole command, and it is the same command on every machine. This is
-the only one in the product a person types with no agent watching, so it is the
-one place a name that does not resolve would have nobody to notice it — which is
-why there is only ever one name.
+That is the whole command — one line, the same on every machine, and it finishes
+the job rather than handing you a second one. This is the only command in the
+product a person types with no agent watching, so it is the one place a name
+that does not resolve would have nobody to notice it, and the one place a
+half-finished job would have nobody to spot it.
 
 It removes the pointer from every client it was written into, and deletes the
 slash command and the skill. Your own instructions files come back
@@ -609,17 +622,15 @@ after. If you want them gone, delete the folder yourself. A tool that can erase
 the thing it spent months building for you is not one you should have trusted
 with it.
 
-**The package itself is still on your machine after the pointer is gone**, and
-that is deliberate — `exposurie uninstall` takes back what we wrote into your
-agent, not what npm put on your PATH. One more line removes it, and `uninstall`
-prints this only when there is actually something there to remove:
+**The package goes too, in the same command.** `uninstall` removes what we wrote
+into your agent *and* takes the package off your PATH, so there is nothing left
+named exposurie and no second line to remember. It says which of those it did.
 
-```bash
-npm uninstall -g @sekhon/exposurie
-```
-
-Two commands, then, and they do different jobs: the first gets exposurie out of
-your agent, the second gets it off your machine.
+It removes the package only when npm installed it and only when that is the copy
+you just ran — so a linked checkout, or a copy you put on your PATH yourself, is
+reported and left alone rather than guessed at. In that one case it prints the
+line for you, because being told a thing is gone when it is not is worse than
+being handed a command.
 
 Changed your mind later? Run `scaffold` again and it picks up exactly where you
 left off — what has been synced is recorded inside the brain, not in the tool.

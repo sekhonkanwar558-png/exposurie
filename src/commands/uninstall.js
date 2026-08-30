@@ -29,7 +29,8 @@
 import { OK } from '../exit-codes.js';
 import { unreachAll } from '../reach.js';
 import { unsurfaceAll } from '../surfaces.js';
-import { installState, UNINSTALL } from '../install.js';
+import { installState } from '../install.js';
+import { removePackage, packageLines } from '../package-removal.js';
 import { detect, tilde } from '../context.js';
 import { block, wrap } from '../output.js';
 import { vaultState } from '../vault.js';
@@ -123,31 +124,30 @@ export function uninstall({ at } = {}) {
     body.push('  No brain found on this machine — there was nothing to keep.');
   }
 
-  // Say what is actually true on this machine rather than describing every way
-  // it could have got here and leaving the person to work out which one they
-  // are. Guessing wrong means someone believes they have uninstalled a package
-  // that is still on their PATH.
+  // ONE COMMAND, so this takes the package too.
+  //
+  // It used to print `npm uninstall -g` and leave that to the user, which made
+  // leaving a two-command job with the difference between them explained. His
+  // ruling, 2026-08-30: *"i just clearly want one install, one sync and one
+  // uninstall command everywhere."* Handing somebody the question of which line
+  // they still need is the thing the second design law exists to forbid, and it
+  // is worst here -- the one command typed with no agent watching, by a person
+  // who has already decided to stop reading us.
+  //
+  // Ordered deliberately: the pointers come out FIRST and the package last. If
+  // npm fails we have still removed every byte we wrote into files the user
+  // owns, which is the promise that matters; the reverse order could leave our
+  // block in their CLAUDE.md with no command left to remove it.
+  //
+  // It reports what happened rather than what it attempted -- see
+  // package-removal.js, which also carries the guard that stops a sandboxed
+  // test from deleting the developer's own global install.
   const install = installState();
+  const pkg = removePackage(install.binary);
   body.push(
     '',
     'THE PACKAGE',
-    ...(install.permanent
-      ? [
-          ...wrap(
-            `It is installed on this machine, at ${tilde(install.binary)}. Your ` +
-              `brain does not need it and neither does anything above — this is ` +
-              `the last line, and it is yours to run when you want:`,
-            74,
-            '  ',
-          ),
-          `      ${UNINSTALL}`,
-        ]
-      : wrap(
-          `Nothing to remove — there is no exposurie command on this PATH, so ` +
-            `the package was never installed here.`,
-          74,
-          '  ',
-        )),
+    ...packageLines(pkg, install.binary, wrap, tilde),
     '',
     ...wrap(
       `Changed your mind later? Run scaffold again and it picks up exactly ` +
@@ -162,5 +162,6 @@ export function uninstall({ at } = {}) {
     code: OK,
     state: d.vault ? vaultState(d.vault, 'uninstall') : { vault: null, self: 'uninstall' },
     body,
+    json: { removed: removed.map((r) => r.label), package: pkg.action },
   };
 }
