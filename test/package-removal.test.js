@@ -43,7 +43,12 @@ import { UNINSTALL } from '../src/install.js';
 // every removePackage() call passes its own fake runner, so npm is never
 // invoked and no path on the real machine is touched. If a test in this file
 // ever stops injecting a runner, that stops being true.
-delete process.env.EXPOSURIE_SKIP_PACKAGE_REMOVAL;
+// `'0'` rather than `delete`: there are now two switches above the logic under
+// test — the flag from test.env, and an automatic one that trips whenever
+// NODE_TEST_CONTEXT is set, which is always true in here. `'0'` is the single
+// explicit "no, really, run the real decision" that turns both off, and it
+// cannot be satisfied by accident the way an absent variable can.
+process.env.EXPOSURIE_SKIP_PACKAGE_REMOVAL = '0';
 
 const WIN = process.platform === 'win32';
 const BIN = WIN ? 'C:\\npm\\exposurie.cmd' : '/usr/local/bin/exposurie';

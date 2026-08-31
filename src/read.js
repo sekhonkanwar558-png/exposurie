@@ -36,7 +36,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { categoryDirs } from './vault.js';
-import { cmd } from './install.js';
+import { cmd, q } from './install.js';
 
 /**
  * How much a single read may spend before the body is replaced by an outline.
@@ -47,10 +47,15 @@ import { cmd } from './install.js';
  */
 export const DEFAULT_READ_BUDGET = 16000;
 
-/** Shell-safe quoting for a printed command. Titles contain spaces and parens. */
-export function q(s) {
-  return `"${String(s).replace(/"/g, '\\"')}"`;
-}
+// `q` now lives beside `cmd` in install.js — the two are one concern, and
+// keeping them apart is what let printed PATHS go unquoted for four releases
+// while printed TITLES were quoted rigorously right here. Re-exported so this
+// stays the import site it has always been.
+//
+// Imported as well as re-exported, deliberately: a bare `export { q } from`
+// forwards the name to importers without binding it in THIS module, so
+// `sectionCmd` below — which is right there — stopped being able to see it.
+export { q };
 
 /** The exact argv that returns one section. The tool prints this; agents never build it. */
 export function sectionCmd(title, heading, nth) {

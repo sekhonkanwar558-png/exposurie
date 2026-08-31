@@ -6,7 +6,7 @@
 // input, and the human step is never a gate.
 
 import { detect, tilde } from '../context.js';
-import { installState, INSTALL, cmd } from '../install.js';
+import { installState, INSTALL, cmd, q } from '../install.js';
 import { unresolved, mirror, stepCtx } from '../pending.js';
 import { block, planBlock, wrap } from '../output.js';
 import { OK, HUMAN } from '../exit-codes.js';
@@ -193,7 +193,7 @@ export function init({ at } = {}) {
   }
   if (!d.vault && !d.configError) {
     steps.push({
-      run: cmd(`scaffold --at ${tilde(vault)}`),
+      run: cmd(`scaffold --at ${q(tilde(vault))}`),
       note:
         `Creates the brain and copies in the schema, the page templates and the ` +
         `prompt that writes pages — those become the user's, and are never ` +

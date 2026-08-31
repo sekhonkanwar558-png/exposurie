@@ -25,6 +25,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, extname } from 'node:path';
 
 import { fileExcluded } from './exclude.js';
+import { bytes } from '../output.js';
 
 /**
  * Extensions no agent can do anything with.
@@ -69,12 +70,6 @@ function walk(dir, root, acc, depth = 0) {
   }
   return acc;
 }
-
-const human = (bytes) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-};
 
 /**
  * What is in `raw/` that the brain has not been told about yet.
@@ -133,7 +128,7 @@ export function findNewFiles(vault, seam, seen = {}, limit = 25) {
       rel,
       ext,
       size: st.size,
-      human: human(st.size),
+      human: bytes(st.size),
       mtime: st.mtimeMs,
       isNew: !prior,
     });
@@ -181,7 +176,7 @@ export function renderFiles(found, vault) {
         'text, so they are recorded here rather than skipped in silence:',
       '',
     );
-    for (const u of found.unreadable) out.push(`- \`${u.rel}\` (${human(u.size)})`);
+    for (const u of found.unreadable) out.push(`- \`${u.rel}\` (${bytes(u.size)})`);
     out.push('');
   }
 

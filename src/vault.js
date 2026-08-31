@@ -159,7 +159,15 @@ export function vaultState(vault, self) {
     self,
     pages: countPages(vault, seam),
     unfiled: st.unfiled ?? 0,
-    lastSyncDays: last ? Math.floor((Date.now() - last) / DAY) : null,
+    // Clamped at zero, because a timestamp can sit in the future and this
+    // number goes on the state line that EVERY command prints. A brain
+    // restored onto a machine with a wrong clock, or one carried across a
+    // timezone change, produced `last sync -5d ago` — a number that cannot
+    // mean anything, printed first, on every invocation. Read as "synced
+    // today", which is the only sane reading of a sync that has not happened
+    // yet. An unparseable date never reaches here: `last` is NaN and falsy,
+    // and the branch below already answers "never synced".
+    lastSyncDays: last ? Math.max(0, Math.floor((Date.now() - last) / DAY)) : null,
     lastBackup: st.lastBackupUtc ?? null,
   };
 }

@@ -52,6 +52,15 @@ import { block, wrap } from './output.js';
 
 export const ALLOW_FILE = 'curate-allow.txt';
 
+/**
+ * How many findings of ONE kind the report prints before it starts counting.
+ *
+ * Five, because the point of listing more than one is to show the shape of the
+ * problem, and five examples show it. The rest are counted, never dropped, and
+ * `--json` still carries every one.
+ */
+const PER_KIND = 5;
+
 const SEP = String.fromCharCode(92);
 
 /** Report paths the way a person types them: forward slashes, brain-relative. */
@@ -769,9 +778,41 @@ export function report(result, vault) {
   const section = (title, list) => {
     if (!list.length) return;
     out.push('', title);
+    // Grouped by kind, and capped per kind rather than overall.
+    //
+    // Uncapped, one `sync` on a brain whose index had fallen behind printed
+    // 400 findings — 1,220 lines, 71 KB — of which 400 were the same finding
+    // about the same index, each with its own two-line explanation repeated
+    // verbatim. That is four times the 16,000-character budget this same
+    // product enforces on a single `read`, spent by the command that runs most
+    // often, on a reader that re-pays for it every turn.
+    //
+    // Capping per KIND rather than taking the first N overall is the part that
+    // matters: it keeps one example of every DISTINCT problem, which is the
+    // diagnostic content. Taking the first N of a 400-long list of one kind
+    // would have hidden the two real findings underneath it.
+    //
+    // Nothing is dropped — the count is stated, and the complete list is in
+    // `--json`, which is where a caller that genuinely wants 400 rows should
+    // be reading them from anyway. Small brains are unaffected: under the cap,
+    // every finding prints exactly as before.
+    const byKind = new Map();
     for (const f of list) {
-      out.push(`  ${f.file}:${f.line}  [${f.kind}]  ${f.what}`);
-      out.push(...wrap(`-> ${f.note}`, 68, '      '));
+      if (!byKind.has(f.kind)) byKind.set(f.kind, []);
+      byKind.get(f.kind).push(f);
+    }
+    for (const [kind, group] of byKind) {
+      for (const f of group.slice(0, PER_KIND)) {
+        out.push(`  ${f.file}:${f.line}  [${f.kind}]  ${f.what}`);
+        out.push(...wrap(`-> ${f.note}`, 68, '      '));
+      }
+      const rest = group.length - PER_KIND;
+      if (rest > 0) {
+        out.push(
+          `  … and ${rest} more [${kind}], not listed. Same finding, same fix — ` +
+            `the complete list is in this command's --json output.`,
+        );
+      }
     }
   };
   section('BROKEN — the graph or the index is wrong', broken);

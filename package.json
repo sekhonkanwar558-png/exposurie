@@ -15,6 +15,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "pretest": "node scripts/clean-temp.js",
     "test": "node --env-file=test/test.env --test"
   },
   "author": "sekhon",

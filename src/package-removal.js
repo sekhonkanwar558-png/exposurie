@@ -163,6 +163,29 @@ export function removePackage(binary, run = npm, dirOf = installedPackageDir, sa
     return { action: 'foreign', reason: 'package removal is disabled in this environment' };
   }
 
+  // The same guard, but one nobody has to REMEMBER. The flag above only
+  // arrives through `test/test.env`, which only `npm test` loads — so running
+  // a single file the ordinary way, `node --test test/uninstall.test.js`, or
+  // calling the binary by hand while poking at output, walks straight back
+  // into the uninstall this whole function is fenced against. That has now
+  // happened three times: twice to `npm test` before the flag existed, and
+  // once more during the 1.2.0 audit, from a hand-run `uninstall` in a loop
+  // collecting sample output.
+  //
+  // `NODE_TEST_CONTEXT` is set by node:test itself and inherited by any child
+  // it spawns, so it is true exactly when a test is what is asking, needs no
+  // wiring in the suite, and cannot be forgotten. A real user never has it.
+  // Additive on purpose: it can only ever decline to remove.
+  //
+  // `'0'` is the explicit opt-out, and package-removal.test.js is the one file
+  // that sets it — the unit tests below this line inject their own npm runner,
+  // so they touch nothing real and MUST reach the logic they are testing.
+  // Spelled as a value rather than as `delete`, because the variable it would
+  // have to delete belongs to the test runner rather than to us.
+  if (process.env.NODE_TEST_CONTEXT && process.env.EXPOSURIE_SKIP_PACKAGE_REMOVAL !== '0') {
+    return { action: 'foreign', reason: 'package removal is disabled under the test runner' };
+  }
+
   const pkgDir = dirOf(binary);
   if (!pkgDir) {
     return { action: 'foreign', reason: `npm did not install the copy at ${dirname(binary)}` };

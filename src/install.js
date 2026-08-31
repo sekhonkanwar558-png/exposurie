@@ -92,6 +92,28 @@ export function installState(env = process.env, platform = process.platform) {
   };
 }
 
+/**
+ * Shell-safe quoting for one argument of a printed command.
+ *
+ * Every printed command is executed by an agent, so an argument that needs
+ * quoting and does not get it is a command that runs and does the WRONG THING
+ * rather than one that fails. Titles were quoted from the start; paths were
+ * not, and paths are the ones that carry spaces on Windows, where
+ * `C:\Users\First Last` is the normal shape of a home directory.
+ *
+ * What that cost: `init` on a machine belonging to anybody with a space in
+ * their name printed `RUN: exposurie scaffold --at C:\Users\Priya Sharma\brain`.
+ * An agent running that line built the brain at `C:\Users\Priya`, reported
+ * success, and exited 10 — the code that means "nothing has failed". The first
+ * command of the product, wrong, silent, and only on other people's machines.
+ *
+ * `~` is safe inside the quotes: no shell expands it there, and expandPath()
+ * resolves it itself, so the tool never depended on the shell for that.
+ */
+export function q(s) {
+  return `"${String(s).replace(/"/g, '\\"')}"`;
+}
+
 /** Just the string the pointer should name. */
 export const invocation = () => INVOCATION;
 

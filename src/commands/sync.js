@@ -45,7 +45,7 @@ import {
 import { join, basename } from 'node:path';
 
 import { detect, brokenConfig, noBrainAt } from '../context.js';
-import { block, planBlock, wrap } from '../output.js';
+import { block, planBlock, wrap, bytes, shrink } from '../output.js';
 import { OK, ERROR, USAGE } from '../exit-codes.js';
 import { describe } from '../extract/transcript.js';
 import { readExports, renderStanding } from '../extract/webchat.js';
@@ -595,7 +595,7 @@ function stage(vault, d) {
         'conversation',
         `${chars.toLocaleString('en-US')} chars` +
           (rawTotal > 0
-            ? `, out of ${(rawTotal / 1048576).toFixed(1)} MB of transcript  (${Math.round(rawTotal / Math.max(chars, 1))}x smaller)`
+            ? `, out of ${bytes(rawTotal)} of transcript${shrink(rawTotal, chars)}`
             : ''),
       ],
     );
@@ -1031,7 +1031,7 @@ function renderManifest(id, rows, extra) {
     '',
     `**${extra.chars.toLocaleString('en-US')} characters of conversation**` +
       (extra.rawTotal > 0
-        ? `, read out of ${(extra.rawTotal / 1048576).toFixed(1)} MB of transcript.`
+        ? `, read out of ${bytes(extra.rawTotal)} of transcript.`
         : '.'),
     '',
   ];

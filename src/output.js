@@ -27,6 +27,40 @@ function pad(s, w) {
   return s + ' '.repeat(Math.max(0, w - s.length));
 }
 
+/**
+ * A byte count a person can read, in the unit that actually fits it.
+ *
+ * One formatter, because there were two and only one of them was right. `sync`
+ * spelled its own as `(n / 1048576).toFixed(1) + ' MB'` in two places, so every
+ * transcript under about fifty kilobytes was reported as `0.0 MB` — printed
+ * directly beside an exact character count, which is where it reads as broken
+ * rather than merely rounded. That is the first sync on a new machine, which is
+ * to say the first number the product ever shows anybody.
+ */
+export function bytes(n) {
+  if (!Number.isFinite(n) || n < 0) return '0 B';
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${Math.round(n / 1024)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
+
+/**
+ * "12x smaller", or nothing at all.
+ *
+ * The ratio is the claim the extractor exists to make, so it is worth printing
+ * — but only when it is one. Rounded to `1x`, "1x smaller" says a thing that is
+ * not true of a number that is not interesting, and it appears exactly when the
+ * batch is small, which is the demo and the first run.
+ */
+export function shrink(rawTotal, chars) {
+  // Floor, not round. This number is the claim the whole extractor is built to
+  // make, so it should never be able to overstate itself — rounding turned 1.5x
+  // into "2x smaller". Flooring can only ever under-sell, and it retires the
+  // meaningless bottom case for free.
+  const ratio = Math.floor(rawTotal / Math.max(chars, 1));
+  return ratio >= 2 ? `  (${ratio}x smaller)` : '';
+}
+
 /** Wrap long prose so a terminal never hard-wraps mid-word. */
 export function wrap(text, width = 76, indent = '') {
   const words = String(text).split(/\s+/).filter(Boolean);

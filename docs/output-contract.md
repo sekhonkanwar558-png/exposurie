@@ -318,6 +318,30 @@ Every command that returns data supports `--json`. Default output stays prose,
 because a model reads it fine and it costs fewer tokens than the same content in
 braces and quotes. JSON is for programmatic callers, not for the agent.
 
+**`--json` always yields JSON.** A command with a structured payload returns it,
+plus `exit`. A command without one — `read` and `help` today — returns the
+envelope below rather than falling back to prose:
+
+```json
+{
+  "exit": 0,
+  "ok": true,
+  "error": null,
+  "text": "…the complete prose rendering, footer included…"
+}
+```
+
+The guarantee is made once, in `bin/exposurie.js`, rather than command by
+command, so a command added later cannot forget to keep it. That matters
+because of how it failed: the writer said `wantsJson && result.json`, so a
+caller that asked for JSON and hit a command without a payload got prose **at
+exit 0** — well-formed, plausible, and unparseable. Nothing raised it, because
+nothing that goes wrong quietly ever does.
+
+A command that grows a real payload later simply sets `json`, and its callers
+see the shape improve; `exit` is present either way, so parsing it never has to
+branch on which kind of command it asked.
+
 ---
 
 ## Adding a command

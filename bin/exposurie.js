@@ -12,6 +12,11 @@ import { ERROR, USAGE, footer } from '../src/exit-codes.js';
 import { COMMANDS, NAMES, versionResult } from '../src/commands/registry.js';
 import { cmd } from '../src/install.js';
 
+// The parsed flags, hoisted so the one writer below can consult them rather
+// than re-reading argv. Null until parsing succeeds, and null forever if it
+// throws — which is exactly the case the fallback down there covers.
+let parsedValues = null;
+
 function main(argv) {
   let parsed;
   try {
@@ -36,6 +41,8 @@ function main(argv) {
   } catch (e) {
     return { code: USAGE, error: { message: e.message, fix: `RUN: ${cmd('help')}` } };
   }
+
+  parsedValues = parsed.values;
 
   // Named `asked` rather than `cmd`, because `cmd` is now the imported helper
   // that spells a command the way it works on this machine — and a local const
@@ -93,10 +100,41 @@ try {
   };
 }
 
-const wantsJson = process.argv.includes('--json');
-if (wantsJson && result.json) {
-  process.stdout.write(JSON.stringify({ ...result.json, exit: result.code }, null, 2) + '\n');
+// Asked as a parsed flag, not by scanning argv for the string. The scan also
+// matched a `--json` that was somebody's DATA — `read --search "--json"` hands
+// that word to `--search`, and the search then answered in a format nobody
+// asked for. Falls back to the scan only when parsing itself failed, which is
+// the one case where there are no parsed values to consult.
+const wantsJson = parsedValues ? Boolean(parsedValues.json) : process.argv.includes('--json');
+
+if (wantsJson) {
+  // ALWAYS JSON once it has been asked for. This used to be
+  // `wantsJson && result.json`, so a command with no structured payload — the
+  // librarian among them — answered a machine caller with prose at exit 0.
+  // That is the worst shape a failure can take here: valid-looking, silent,
+  // and only discovered by whatever was parsing it. docs/output-contract.md
+  // promises every command that returns data supports the flag, so the
+  // guarantee is made structurally rather than command by command, and a
+  // command added later cannot forget to keep it.
+  const payload = result.json
+    ? { ...result.json, exit: result.code }
+    : {
+        exit: result.code,
+        ok: result.code === 0,
+        error: result.error ? { message: result.error.message, fix: result.error.fix ?? null } : null,
+        // The full human rendering, so nothing this command said is lost just
+        // because it has no structured form yet.
+        text: render(result) + footer(result.code),
+      };
+  process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
 } else {
   process.stdout.write(render(result) + footer(result.code) + '\n');
 }
-process.exit(result.code);
+
+// `process.exitCode`, not `process.exit()`. On Windows a write to a TTY is
+// asynchronous, and `process.exit()` does not wait for it — so exiting on the
+// line after the write can truncate the output on the one platform this was
+// built on. Setting the code lets Node drain stdout and exit on its own. Every
+// command here is synchronous and holds nothing open, so there is nothing to
+// keep the loop alive once the write lands.
+process.exitCode = result.code;
