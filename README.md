@@ -665,6 +665,12 @@ by breaking the thing it guards and watching it fail:
   setup refuses instead. The whole product is run on a PATH with nothing
   installed, and `scaffold` has to decline there, write nothing, and name the
   one line that fixes it
+- **no printed command names a path with a space in it unquoted** — every
+  command is run on a home directory whose name contains one, and every `RUN:`
+  line it prints is checked. The printed `scaffold` line is then split the way a
+  shell splits it and executed, and the brain has to land where the line said
+- `--json` never answers with prose — a caller that asked for JSON gets JSON
+  from every command, including the ones with nothing structured to say
 - `uninstall` never removes a directory it did not create
 - no two always-loaded surfaces spend your context budget on the same job
 - text that only looks like something you typed never reaches your brain

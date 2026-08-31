@@ -101,6 +101,36 @@ is covered without anyone remembering this page exists.
 > builds the name from a variable, and `bin/` is not `src/`. The test looks at
 > output, which is why it found them.
 
+### 3d. Never print a command that will not run
+
+The third sibling, and the last one to be found. 3b says the command must
+**exist**; this says it must **work when pasted**. A command that exists and is
+spelled so that a shell mis-parses it fails worse than one that does not exist,
+because it does not fail — it succeeds at something else.
+
+`init` printed:
+
+```
+RUN: exposurie scaffold --at C:\Users\Priya Sharma\brain
+```
+
+An agent running that line built the brain at `C:\Users\Priya`, reported
+success, and exited 10 — the code that means *nothing failed*. On Windows a
+space in the home directory is ordinary, so the first command of the product was
+wrong on a large share of the machines it had never run on.
+
+The quoting helper existed and had been applied rigorously — to **titles**,
+which is where spaces had been noticed. Paths, which carry spaces far more
+often, were interpolated bare. So `q()` now sits beside `cmd()` in
+`src/install.js`, because spelling a command and quoting its arguments are one
+concern and separating them is what let this survive four releases.
+
+The test does not check the one site. It runs every command on a home directory
+whose name contains a space, takes every `RUN:` line printed, and fails if that
+path appears anywhere outside quotes — then tokenises the printed `scaffold`
+line the way a shell would, runs it, and asserts the brain landed where the
+message said. **The next unquoted argument is caught wherever it is printed.**
+
 ### 4. The directive rides the output
 
 Anything the agent must keep doing is attached to output it is **already
